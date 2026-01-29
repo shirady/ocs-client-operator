@@ -257,7 +257,7 @@ func (r *storageClientReconcile) reconcile(ctx context.Context, req ctrl.Request
 	r.ctx = ctx
 	r.storageClient.Name = req.Name
 
-	r.log.Info("Starting reconcile iteration for StorageClient", "req", req)
+	r.log.Info("Starting reconcile iteration for StorageClient SDSD", "req", req)
 	if err := r.get(&r.storageClient); err != nil {
 		if kerrors.IsNotFound(err) {
 			r.log.Info("StorageClient resource not found. Ignoring since object must be deleted.")
