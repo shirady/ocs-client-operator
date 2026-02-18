@@ -32,7 +32,7 @@ require (
 	github.com/ramendr/ramen/api v0.0.0-20241105140706-d8587766acb3
 	github.com/red-hat-storage/external-snapshotter/client/v8 v8.2.1-0.20250611085013-4bd0abb96745
 	github.com/red-hat-storage/ocs-client-operator/api v0.0.0-00010101000000-000000000000
-	github.com/red-hat-storage/ocs-operator/services/provider/api/v4 v4.0.0-20251126052642-f8ae02a1c7e4
+	github.com/red-hat-storage/ocs-operator/services/provider/api/v4 69b82919ef95164287e587a1d56a36539a6b5d8c
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.77.0
 	k8s.io/api v0.33.3
