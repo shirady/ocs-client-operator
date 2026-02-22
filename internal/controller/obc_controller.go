@@ -3,7 +3,7 @@ package controller
 import (
 	"context"
 
-	obv1alpha1 "github.com/kube-object-storage/lib-bucket-provisioner/pkg/apis/objectbucket.io/v1alpha1"
+	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,7 +33,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("OBC").
 		For(
-			&obv1alpha1.ObjectBucketClaim{},
+			&nbv1.ObjectBucketClaim{},
 			builder.WithPredicates(createOrDeleteOnly),
 		).
 		Complete(r)
@@ -44,7 +44,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx).WithName("OBC")
 
-	obc := &obv1alpha1.ObjectBucketClaim{}
+	obc := &nbv1.ObjectBucketClaim{}
 	err := r.Get(ctx, req.NamespacedName, obc)
 	if err != nil {
 		if errors.IsNotFound(err) {
