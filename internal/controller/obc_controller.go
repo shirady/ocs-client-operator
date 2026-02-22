@@ -15,10 +15,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+const (
+	operatorObcFinalizer = "ocs-client-operator.ocs.openshift.io/obc"
 )
 
 // OBCReconciler reconciles a ObjectBucketClaim object
@@ -66,16 +71,30 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return reconcile.Result{}, err
 	}
 
-	if obc.DeletionTimestamp != nil {
+	if !obc.GetDeletionTimestamp().IsZero() {
 		log.Info("OBC deleted", "namespace", obc.Namespace, "name", obc.Name)
 		if err := r.notifyObcDeleted(ctx, log, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}); err != nil {
 			log.Error(err, "failed to notify provider of OBC deletion")
 			return reconcile.Result{}, err
 		}
+		if controllerutil.RemoveFinalizer(obc, operatorObcFinalizer) {
+			log.Info("removing finalizer from OBC.", "OBC", obc.Name)
+			if err := r.Update(ctx, obc); err != nil {
+				log.Info("Failed to remove finalizer from OBC", "OBC", obc.Name)
+				return reconcile.Result{}, fmt.Errorf("failed to remove finalizer from OBC: %v", err)
+			}
+		}
 		return reconcile.Result{}, nil
 	}
 
 	log.Info("OBC created", "namespace", obc.Namespace, "name", obc.Name)
+	if controllerutil.AddFinalizer(obc, operatorObcFinalizer) {
+		log.Info("Finalizer not found for OBC. Adding finalizer.", "OBC", obc.Name)
+		if err := r.Update(ctx, obc); err != nil {
+			log.Info("Failed to add finalizer to OBC", "OBC", obc.Name, obc.Namespace)
+			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
+		}
+	}
 	if err := r.notifyObcCreated(ctx, log, obc); err != nil {
 		log.Error(err, "failed to notify provider of OBC creation")
 		return reconcile.Result{}, err
