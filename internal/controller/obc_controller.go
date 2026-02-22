@@ -42,7 +42,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	log := log.FromContext(ctx).WithName("OBC")
 
 	obc := &obv1alpha1.ObjectBucketClaim{}
 	err := r.Get(ctx, req.NamespacedName, obc)
