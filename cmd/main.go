@@ -228,6 +228,8 @@ func main() {
 					// only cache our validation webhook
 					Field: subscriptionwebhookSelector,
 				},
+				// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE
+				&nbv1.ObjectBucketClaim{}: {},
 			},
 			DefaultNamespaces: defaultNamespaces,
 		},
