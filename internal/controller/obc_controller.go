@@ -34,18 +34,29 @@ type OBCReconciler struct {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Only reconcile on Create and Delete events (not on Update).
-	createOrDeleteOnly := predicate.Funcs{
+	// Reconcile on Create, Delete, and Update when the object is being deleted (deletionTimestamp set).
+	// kubectl delete sets deletionTimestamp via an Update, not a Delete event, so we must handle that.
+	obcPredicate := predicate.Funcs{
 		CreateFunc: func(event.CreateEvent) bool { return true },
-		UpdateFunc: func(event.UpdateEvent) bool { return false },
 		DeleteFunc: func(event.DeleteEvent) bool { return true },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if e.ObjectNew == nil {
+				return false
+			}
+			obc, ok := e.ObjectNew.(*nbv1.ObjectBucketClaim)
+			if !ok {
+				return false
+			}
+			// Reconcile when the object is marked for deletion so we can notify and remove our finalizer
+			return !obc.GetDeletionTimestamp().IsZero()
+		},
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("OBC").
 		For(
 			&nbv1.ObjectBucketClaim{},
-			builder.WithPredicates(createOrDeleteOnly),
+			builder.WithPredicates(obcPredicate),
 		).
 		Complete(r)
 }
