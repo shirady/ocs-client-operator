@@ -250,6 +250,8 @@ rules:
   - get
   - list
   - watch
+  - update
+  - patch
 - apiGroups:
   - ocs.openshift.io
   resources:
