@@ -132,7 +132,7 @@ func (r *OBCReconciler) notifyObcCreated(ctx context.Context, log logr.Logger, o
 	if err != nil {
 		return fmt.Errorf("NotifyObcCreated: %w", err)
 	}
-	log.Info("notified provider of OBC creation", "namespace", obc.Namespace, "name", obc.Name)
+	log.Info("Notify of OBC created completed", "namespace", obc.Namespace, "name", obc.Name)
 	return nil
 }
 
@@ -150,7 +150,7 @@ func (r *OBCReconciler) notifyObcDeleted(ctx context.Context, log logr.Logger, n
 	if err != nil {
 		return fmt.Errorf("NotifyObcDeleted: %w", err)
 	}
-	log.Info("notified provider of OBC deletion", "namespace", nn.Namespace, "name", nn.Name)
+	log.Info("Notify of OBC deleted completed", "namespace", nn.Namespace, "name", nn.Name)
 	return nil
 }
 
