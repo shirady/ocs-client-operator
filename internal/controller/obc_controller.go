@@ -50,7 +50,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get;list;watch
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -91,7 +91,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if controllerutil.AddFinalizer(obc, operatorObcFinalizer) {
 		log.Info("Finalizer not found for OBC. Adding finalizer.", "OBC", obc.Name)
 		if err := r.Update(ctx, obc); err != nil {
-			log.Info("Failed to add finalizer to OBC", "OBC", obc.Name, obc.Namespace)
+			log.Info("Failed to add finalizer to OBC", "name", obc.Name, "namespace", obc.Namespace)
 			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
 		}
 	}
