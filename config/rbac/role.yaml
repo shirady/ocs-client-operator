@@ -249,9 +249,9 @@ rules:
   verbs:
   - get
   - list
-  - watch
-  - update
   - patch
+  - update
+  - watch
 - apiGroups:
   - ocs.openshift.io
   resources:
