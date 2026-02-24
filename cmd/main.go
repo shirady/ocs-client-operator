@@ -36,7 +36,6 @@ import (
 	csiopv1 "github.com/ceph/ceph-csi-operator/api/v1"
 	csiaddonsv1alpha1 "github.com/csi-addons/kubernetes-csi-addons/api/csiaddons/v1alpha1"
 	replicationv1alpha1 "github.com/csi-addons/kubernetes-csi-addons/api/replication.storage/v1alpha1"
-	objectbucketv1alpha1 "github.com/kube-object-storage/lib-bucket-provisioner/pkg/apis/objectbucket.io/v1alpha1"
 	groupsnapapi "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumegroupsnapshot/v1beta1"
 	snapapi "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	nbapis "github.com/noobaa/noobaa-operator/v5/pkg/apis"
@@ -56,6 +55,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -96,7 +96,16 @@ func init() {
 	utilruntime.Must(groupsnapapi.AddToScheme(scheme))
 	utilruntime.Must(odfgsapiv1b1.AddToScheme(scheme))
 	utilruntime.Must(csiaddonsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(objectbucketv1alpha1.AddToScheme(scheme)) // nbapis.AddToScheme does not register OB, OBCs
+	// ObjectBucketClaim/ObjectBucket (objectbucket.io); nbapis.AddToScheme does not register these types
+	// this part was added to avoid direct import of lib-bucket-provisioner
+	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
+	scheme.AddKnownTypes(objectBucketGV,
+		&nbv1.ObjectBucketClaim{},
+		&nbv1.ObjectBucketClaimList{},
+		&nbv1.ObjectBucket{},
+		&nbv1.ObjectBucketList{},
+	)
+	metav1.AddToGroupVersion(scheme, objectBucketGV)
 	//+kubebuilder:scaffold:scheme
 }
 
