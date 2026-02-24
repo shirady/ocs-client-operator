@@ -71,7 +71,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.ctx = ctx
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
+	r.log = ctrl.LoggerFrom(r.ctx).WithName("OBC")
 
 	r.log.Info("Starting reconcile iteration for OBC", "req", req)
 
@@ -99,7 +99,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		if controllerutil.RemoveFinalizer(obc, operatorObcFinalizer) {
 			r.log.Info("removing finalizer from OBC.", "namespaced/name", client.ObjectKeyFromObject(obc))
-			if err := r.Update(ctx, obc); err != nil {
+			if err := r.Update(r.ctx, obc); err != nil {
 				r.log.Info("Failed to remove finalizer from OBC", "namespaced/name", client.ObjectKeyFromObject(obc))
 				return reconcile.Result{}, fmt.Errorf("failed to remove finalizer from OBC: %v", err)
 			}
@@ -119,7 +119,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err != nil {
 		r.log.Error(err, "failed to get StorageClient for OBC create")
 		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
-		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
+		if statusErr := r.Client.Status().Update(r.ctx, obc); statusErr != nil {
 			r.log.Error(statusErr, "Failed to update OBC status")
 		}
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
@@ -127,10 +127,17 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err := r.notifyObcCreated(storageClient, obc); err != nil {
 		r.log.Error(err, "failed to notify provider of OBC creation", "namespaced/name", client.ObjectKeyFromObject(obc))
 		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
-		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
+		if statusErr := r.Client.Status().Update(r.ctx, obc); statusErr != nil {
 			r.log.Error(statusErr, "Failed to update OBC status")
 		}
 		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+	// Clear Failed status when a retry succeeds
+	if obc.Status.Phase == ObjectBucketClaimStatusPhaseFailed {
+		obc.Status.Phase = ""
+		if statusErr := r.Client.Status().Update(r.ctx, obc); statusErr != nil {
+			r.log.Error(statusErr, "Failed to update OBC status after success")
+		}
 	}
 	return reconcile.Result{}, nil
 }
