@@ -25,7 +25,8 @@ import (
 )
 
 const (
-	operatorObcFinalizer = "ocs-client-operator.ocs.openshift.io/obc"
+	operatorObcFinalizer               = "ocs-client-operator.ocs.openshift.io/obc"
+	ObjectBucketClaimStatusPhaseFailed = "Failed"
 )
 
 // OBCReconciler reconciles a ObjectBucketClaim object
@@ -69,6 +70,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx).WithName("OBC")
+	log.Info("Starting reconcile iteration for OBC", "req", req)
 
 	obc := &nbv1.ObjectBucketClaim{}
 	err := r.Get(ctx, req.NamespacedName, obc)
@@ -78,19 +80,19 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return reconcile.Result{}, nil
 		}
 		log.Error(err, "failed to get OBC")
-		return reconcile.Result{}, err
+		return reconcile.Result{}, fmt.Errorf("failed to get OBC: %v", err)
 	}
 
 	if !obc.GetDeletionTimestamp().IsZero() {
 		log.Info("OBC deleted", "namespace", obc.Namespace, "name", obc.Name)
 		storageClient, err := r.getStorageClientFromStorageClass(ctx, obc.Spec.StorageClassName)
 		if err != nil {
-			log.Error(err, "failed to get StorageClient for notify")
-			return reconcile.Result{}, err
+			log.Error(err, "failed to get StorageClient for OBC delete")
+			return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC delete: %v", err)
 		}
 		if err := r.notifyObcDeleted(ctx, log, storageClient, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}); err != nil {
 			log.Error(err, "failed to notify provider of OBC deletion")
-			return reconcile.Result{}, err
+			return reconcile.Result{}, fmt.Errorf("failed to delete the OBC on provider cluster: %v", err)
 		}
 		if controllerutil.RemoveFinalizer(obc, operatorObcFinalizer) {
 			log.Info("removing finalizer from OBC.", "OBC", obc.Name)
@@ -112,12 +114,20 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 	storageClient, err := r.getStorageClientFromStorageClass(ctx, obc.Spec.StorageClassName)
 	if err != nil {
-		log.Error(err, "failed to get StorageClient for notify")
-		return reconcile.Result{}, err
+		log.Error(err, "failed to get StorageClient for OBC create")
+		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
+		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
+			log.Error(statusErr, "Failed to update OBC status")
+		}
+		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC create: %v", err)
 	}
 	if err := r.notifyObcCreated(ctx, log, storageClient, obc); err != nil {
 		log.Error(err, "failed to notify provider of OBC creation")
-		return reconcile.Result{}, err
+		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
+		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
+			log.Error(statusErr, "Failed to update OBC status")
+		}
+		return reconcile.Result{}, fmt.Errorf("failed to create the OBC on provider cluster: %v", err)
 	}
 	return reconcile.Result{}, nil
 }
