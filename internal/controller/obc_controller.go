@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
@@ -39,7 +40,6 @@ type OBCReconciler struct {
 // SetupWithManager sets up the controller with the Manager.
 func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Reconcile on Create, Delete, and Update when the object is being deleted (deletionTimestamp set).
-	// kubectl delete sets deletionTimestamp via an Update, not a Delete event, so we must handle that.
 	obcPredicate := predicate.Funcs{
 		CreateFunc: func(event.CreateEvent) bool { return true },
 		DeleteFunc: func(event.DeleteEvent) bool { return true },
@@ -51,7 +51,6 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return false
 			}
-			// Reconcile when the object is marked for deletion so we can notify and remove our finalizer
 			return !obc.GetDeletionTimestamp().IsZero()
 		},
 	}
@@ -123,7 +122,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
 			r.log.Error(statusErr, "Failed to update OBC status")
 		}
-		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC create: %v", err)
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	if err := r.notifyObcCreated(storageClient, obc); err != nil {
 		r.log.Error(err, "failed to notify provider of OBC creation", "namespaced/name", client.ObjectKeyFromObject(obc))
@@ -131,7 +130,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
 			r.log.Error(statusErr, "Failed to update OBC status")
 		}
-		return reconcile.Result{}, fmt.Errorf("failed to create the OBC on provider cluster: %v", err)
+		return reconcile.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	return reconcile.Result{}, nil
 }
