@@ -87,20 +87,20 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 
 	if !obc.GetDeletionTimestamp().IsZero() {
-		r.log.Info("OBC deleted", "namespace", obc.Namespace, "name", obc.Name)
+		r.log.Info("OBC deleted", "namespaced/name", client.ObjectKeyFromObject(obc))
 		storageClient, err := r.getStorageClientFromStorageClass(obc.Spec.StorageClassName)
 		if err != nil {
 			r.log.Error(err, "failed to get StorageClient for OBC delete")
 			return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC delete: %v", err)
 		}
 		if err := r.notifyObcDeleted(storageClient, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}); err != nil {
-			r.log.Error(err, "failed to notify provider of OBC deletion")
+			r.log.Error(err, "failed to notify provider of OBC deletion", "namespaced/name", client.ObjectKeyFromObject(obc))
 			return reconcile.Result{}, fmt.Errorf("failed to delete the OBC on provider cluster: %v", err)
 		}
 		if controllerutil.RemoveFinalizer(obc, operatorObcFinalizer) {
-			r.log.Info("removing finalizer from OBC.", "OBC", obc.Name)
+			r.log.Info("removing finalizer from OBC.", "namespaced/name", client.ObjectKeyFromObject(obc))
 			if err := r.Update(ctx, obc); err != nil {
-				r.log.Info("Failed to remove finalizer from OBC", "OBC", obc.Name)
+				r.log.Info("Failed to remove finalizer from OBC", "namespaced/name", client.ObjectKeyFromObject(obc))
 				return reconcile.Result{}, fmt.Errorf("failed to remove finalizer from OBC: %v", err)
 			}
 		}
@@ -109,9 +109,9 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	r.log.Info("OBC created", "namespace", obc.Namespace, "name", obc.Name)
 	if controllerutil.AddFinalizer(obc, operatorObcFinalizer) {
-		r.log.Info("Finalizer not found for OBC. Adding finalizer.", "OBC", obc.Name)
+		r.log.Info("Finalizer not found for OBC. Adding finalizer.", "namespaced/name", client.ObjectKeyFromObject(obc))
 		if err := r.Update(r.ctx, obc); err != nil {
-			r.log.Info("Failed to add finalizer to OBC", "name", obc.Name, "namespace", obc.Namespace)
+			r.log.Info("Failed to add finalizer to OBC", "namespaced/name", client.ObjectKeyFromObject(obc))
 			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
 		}
 	}
@@ -125,7 +125,7 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC create: %v", err)
 	}
 	if err := r.notifyObcCreated(storageClient, obc); err != nil {
-		r.log.Error(err, "failed to notify provider of OBC creation")
+		r.log.Error(err, "failed to notify provider of OBC creation", "namespaced/name", client.ObjectKeyFromObject(obc))
 		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
 		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
 			r.log.Error(statusErr, "Failed to update OBC status")
