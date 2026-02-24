@@ -37,7 +37,7 @@ type OBCReconciler struct {
 	ctx    context.Context
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager sets up the controller with the Manager
 func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Reconcile on Create, Delete, and Update when the object is being deleted (deletionTimestamp set).
 	obcPredicate := predicate.Funcs{
@@ -64,10 +64,10 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update;patch
-//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims/status,verbs=get;patch;update
-//+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get;list;watch
-//+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.ctx = ctx
