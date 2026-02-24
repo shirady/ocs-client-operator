@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -33,6 +32,8 @@ const (
 type OBCReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	log    logr.Logger
+	ctx    context.Context
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -69,63 +70,65 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx).WithName("OBC")
-	log.Info("Starting reconcile iteration for OBC", "req", req)
+	r.ctx = ctx
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
+
+	r.log.Info("Starting reconcile iteration for OBC", "req", req)
 
 	obc := &nbv1.ObjectBucketClaim{}
-	err := r.Get(ctx, req.NamespacedName, obc)
+	err := r.Get(r.ctx, req.NamespacedName, obc)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			log.Info("OBC resource not found. Ignoring since object must be deleted.")
+			r.log.Info("OBC resource not found. Ignoring since object must be deleted.")
 			return reconcile.Result{}, nil
 		}
-		log.Error(err, "failed to get OBC")
+		r.log.Error(err, "failed to get OBC")
 		return reconcile.Result{}, fmt.Errorf("failed to get OBC: %v", err)
 	}
 
 	if !obc.GetDeletionTimestamp().IsZero() {
-		log.Info("OBC deleted", "namespace", obc.Namespace, "name", obc.Name)
-		storageClient, err := r.getStorageClientFromStorageClass(ctx, obc.Spec.StorageClassName)
+		r.log.Info("OBC deleted", "namespace", obc.Namespace, "name", obc.Name)
+		storageClient, err := r.getStorageClientFromStorageClass(obc.Spec.StorageClassName)
 		if err != nil {
-			log.Error(err, "failed to get StorageClient for OBC delete")
+			r.log.Error(err, "failed to get StorageClient for OBC delete")
 			return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC delete: %v", err)
 		}
-		if err := r.notifyObcDeleted(ctx, log, storageClient, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}); err != nil {
-			log.Error(err, "failed to notify provider of OBC deletion")
+		if err := r.notifyObcDeleted(storageClient, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}); err != nil {
+			r.log.Error(err, "failed to notify provider of OBC deletion")
 			return reconcile.Result{}, fmt.Errorf("failed to delete the OBC on provider cluster: %v", err)
 		}
 		if controllerutil.RemoveFinalizer(obc, operatorObcFinalizer) {
-			log.Info("removing finalizer from OBC.", "OBC", obc.Name)
+			r.log.Info("removing finalizer from OBC.", "OBC", obc.Name)
 			if err := r.Update(ctx, obc); err != nil {
-				log.Info("Failed to remove finalizer from OBC", "OBC", obc.Name)
+				r.log.Info("Failed to remove finalizer from OBC", "OBC", obc.Name)
 				return reconcile.Result{}, fmt.Errorf("failed to remove finalizer from OBC: %v", err)
 			}
 		}
 		return reconcile.Result{}, nil
 	}
 
-	log.Info("OBC created", "namespace", obc.Namespace, "name", obc.Name)
+	r.log.Info("OBC created", "namespace", obc.Namespace, "name", obc.Name)
 	if controllerutil.AddFinalizer(obc, operatorObcFinalizer) {
-		log.Info("Finalizer not found for OBC. Adding finalizer.", "OBC", obc.Name)
-		if err := r.Update(ctx, obc); err != nil {
-			log.Info("Failed to add finalizer to OBC", "name", obc.Name, "namespace", obc.Namespace)
+		r.log.Info("Finalizer not found for OBC. Adding finalizer.", "OBC", obc.Name)
+		if err := r.Update(r.ctx, obc); err != nil {
+			r.log.Info("Failed to add finalizer to OBC", "name", obc.Name, "namespace", obc.Namespace)
 			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
 		}
 	}
-	storageClient, err := r.getStorageClientFromStorageClass(ctx, obc.Spec.StorageClassName)
+	storageClient, err := r.getStorageClientFromStorageClass(obc.Spec.StorageClassName)
 	if err != nil {
-		log.Error(err, "failed to get StorageClient for OBC create")
+		r.log.Error(err, "failed to get StorageClient for OBC create")
 		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
 		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
-			log.Error(statusErr, "Failed to update OBC status")
+			r.log.Error(statusErr, "Failed to update OBC status")
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient for OBC create: %v", err)
 	}
-	if err := r.notifyObcCreated(ctx, log, storageClient, obc); err != nil {
-		log.Error(err, "failed to notify provider of OBC creation")
+	if err := r.notifyObcCreated(storageClient, obc); err != nil {
+		r.log.Error(err, "failed to notify provider of OBC creation")
 		obc.Status.Phase = ObjectBucketClaimStatusPhaseFailed
 		if statusErr := r.Client.Status().Update(ctx, obc); statusErr != nil {
-			log.Error(statusErr, "Failed to update OBC status")
+			r.log.Error(statusErr, "Failed to update OBC status")
 		}
 		return reconcile.Result{}, fmt.Errorf("failed to create the OBC on provider cluster: %v", err)
 	}
@@ -133,12 +136,12 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 }
 
 // getStorageClientFromStorageClass returns the StorageClient that owns the given StorageClass (via ownerReference).
-func (r *OBCReconciler) getStorageClientFromStorageClass(ctx context.Context, storageClassName string) (*v1alpha1.StorageClient, error) {
+func (r *OBCReconciler) getStorageClientFromStorageClass(storageClassName string) (*v1alpha1.StorageClient, error) {
 	if storageClassName == "" {
 		return nil, fmt.Errorf("storageClassName is empty")
 	}
 	sc := &storagev1.StorageClass{}
-	if err := r.Get(ctx, types.NamespacedName{Name: storageClassName}, sc); err != nil {
+	if err := r.Get(r.ctx, types.NamespacedName{Name: storageClassName}, sc); err != nil {
 		return nil, fmt.Errorf("get StorageClass %q: %w", storageClassName, err)
 	}
 	var ownerRef *metav1.OwnerReference
@@ -152,7 +155,7 @@ func (r *OBCReconciler) getStorageClientFromStorageClass(ctx context.Context, st
 		return nil, fmt.Errorf("StorageClass %q has no StorageClient ownerReference", storageClassName)
 	}
 	storageClient := &v1alpha1.StorageClient{}
-	if err := r.Get(ctx, types.NamespacedName{Name: ownerRef.Name}, storageClient); err != nil {
+	if err := r.Get(r.ctx, types.NamespacedName{Name: ownerRef.Name}, storageClient); err != nil {
 		return nil, fmt.Errorf("get StorageClient %q (owner of StorageClass %q): %w", ownerRef.Name, storageClassName, err)
 	}
 	if storageClient.Status.ConsumerID == "" || storageClient.Spec.StorageProviderEndpoint == "" {
@@ -162,32 +165,32 @@ func (r *OBCReconciler) getStorageClientFromStorageClass(ctx context.Context, st
 }
 
 // notifyObcCreated notifies the provider of the creation of an OBC.
-func (r *OBCReconciler) notifyObcCreated(ctx context.Context, log logr.Logger, storageClient *v1alpha1.StorageClient, obc *nbv1.ObjectBucketClaim) error {
-	pc, err := NewProviderClientForStorageClient(ctx, storageClient)
+func (r *OBCReconciler) notifyObcCreated(storageClient *v1alpha1.StorageClient, obc *nbv1.ObjectBucketClaim) error {
+	pc, err := NewProviderClientForStorageClient(r.ctx, storageClient)
 	if err != nil {
 		return fmt.Errorf("create provider client: %w", err)
 	}
 	defer pc.Close()
-	_, err = pc.NotifyObcCreated(ctx, storageClient.Status.ConsumerID, obc)
+	_, err = pc.NotifyObcCreated(r.ctx, storageClient.Status.ConsumerID, obc)
 	if err != nil {
 		return fmt.Errorf("NotifyObcCreated: %w", err)
 	}
-	log.Info("Notify of OBC created completed", "namespace", obc.Namespace, "name", obc.Name)
+	r.log.Info("Notify of OBC created completed", "namespace", obc.Namespace, "name", obc.Name)
 	return nil
 }
 
 // notifyObcDeleted notifies the provider of the deletion of an OBC.
-func (r *OBCReconciler) notifyObcDeleted(ctx context.Context, log logr.Logger, storageClient *v1alpha1.StorageClient, obcDetails types.NamespacedName) error {
-	pc, err := NewProviderClientForStorageClient(ctx, storageClient)
+func (r *OBCReconciler) notifyObcDeleted(storageClient *v1alpha1.StorageClient, obcDetails types.NamespacedName) error {
+	pc, err := NewProviderClientForStorageClient(r.ctx, storageClient)
 	if err != nil {
 		return fmt.Errorf("create provider client: %w", err)
 	}
 	defer pc.Close()
-	_, err = pc.NotifyObcDeleted(ctx, storageClient.Status.ConsumerID, obcDetails)
+	_, err = pc.NotifyObcDeleted(r.ctx, storageClient.Status.ConsumerID, obcDetails)
 	if err != nil {
 		return fmt.Errorf("NotifyObcDeleted: %w", err)
 	}
-	log.Info("Notify of OBC deleted completed", "namespace", obcDetails.Namespace, "name", obcDetails.Name)
+	r.log.Info("Notify of OBC deleted completed", "namespace", obcDetails.Namespace, "name", obcDetails.Name)
 	return nil
 }
 
