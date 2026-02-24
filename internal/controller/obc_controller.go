@@ -56,7 +56,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		Named("OBC").
+		Named("ObjectBucketClaim").
 		For(
 			&nbv1.ObjectBucketClaim{},
 			builder.WithPredicates(obcPredicate),
