@@ -66,6 +66,7 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims/status,verbs=get;patch;update
 //+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get;list;watch
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
