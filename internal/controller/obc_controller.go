@@ -101,7 +101,6 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			r.log.Error(err, "failed to notify provider of OBC deletion", "namespaced/name", client.ObjectKeyFromObject(obc))
 			return reconcile.Result{}, fmt.Errorf("failed to delete the OBC on provider cluster: %v", err)
 		}
-		// Release OB, ConfigMap, Secret. When not Bound these may not exist; getResources treats NotFound as non-fatal.
 		r.log.Info("releasing OBC resources", "namespaced/name", client.ObjectKeyFromObject(obc))
 		ob, cm, secret, errs := r.getResources(obc)
 		if len(errs) > 0 {
