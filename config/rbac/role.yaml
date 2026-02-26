@@ -260,6 +260,16 @@ rules:
   - patch
   - update
 - apiGroups:
+  - objectbucket.io
+  resources:
+  - objectbuckets
+  verbs:
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - ocs.openshift.io
   resources:
   - storageclients
