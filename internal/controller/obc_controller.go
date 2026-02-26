@@ -28,7 +28,6 @@ import (
 const (
 	ObcFinalizer                       = nbv1.ObjectBucketFinalizer
 	ObjectBucketClaimStatusPhaseFailed = "Failed"
-	ObjectBucketClaimStatusPhaseBound  = "Bound"
 )
 
 // OBCReconciler reconciles a ObjectBucketClaim object
@@ -102,17 +101,16 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			r.log.Error(err, "failed to notify provider of OBC deletion", "namespaced/name", client.ObjectKeyFromObject(obc))
 			return reconcile.Result{}, fmt.Errorf("failed to delete the OBC on provider cluster: %v", err)
 		}
-		if obc.Status.Phase == ObjectBucketClaimStatusPhaseBound {
-			r.log.Info("OBC is Bound - release resources", "namespaced/name", client.ObjectKeyFromObject(obc))
-			ob, cm, secret, errs := r.getResources(obc)
-			if len(errs) > 0 {
-				r.log.Error(errs[0], "failed to get related resources for OBC delete")
-				return reconcile.Result{}, fmt.Errorf("failed to get related resources for OBC delete: %v", errs)
-			}
-			if err := r.deleteResources(ob, cm, secret, obc); err != nil {
-				r.log.Error(err, "failed to delete resources for OBC delete")
-				return reconcile.Result{}, fmt.Errorf("failed to delete resources for OBC delete: %v", err)
-			}
+		// Release OB, ConfigMap, Secret. When not Bound these may not exist; getResources treats NotFound as non-fatal.
+		r.log.Info("releasing OBC resources", "namespaced/name", client.ObjectKeyFromObject(obc))
+		ob, cm, secret, errs := r.getResources(obc)
+		if len(errs) > 0 {
+			r.log.Error(errs[0], "failed to get related resources for OBC delete")
+			return reconcile.Result{}, fmt.Errorf("failed to get related resources for OBC delete: %v", errs)
+		}
+		if err := r.deleteResources(ob, cm, secret, obc); err != nil {
+			r.log.Error(err, "failed to delete resources for OBC delete")
+			return reconcile.Result{}, fmt.Errorf("failed to delete resources for OBC delete: %v", err)
 		}
 		if controllerutil.RemoveFinalizer(obc, ObcFinalizer) {
 			r.log.Info("removing finalizer from OBC", "namespaced/name", client.ObjectKeyFromObject(obc))
