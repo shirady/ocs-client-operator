@@ -228,14 +228,14 @@ func NewProviderClientForStorageClient(ctx context.Context, sc *v1alpha1.Storage
 // The names of the ConfigMap and Secret are always the same as the OBC name.
 // The names of the OB's are of the following format: "obc-<namespace_of_OBC>-<OBC_name>"
 func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, errs []error) {
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, ob); err != nil {
+	obName := fmt.Sprintf("obc-%s-%s", obc.Namespace, obc.Name)
+	if err := r.Get(r.ctx, types.NamespacedName{Name: obName}, ob); err != nil {
 		errs = append(errs, fmt.Errorf("failed to get OB: %v", err))
 	}
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, cm); err != nil {
 		errs = append(errs, fmt.Errorf("failed to get config map: %v", err))
 	}
-	obName := fmt.Sprintf("obc-%s-%s", obc.Namespace, obc.Name)
-	if err := r.Get(r.ctx, types.NamespacedName{Name: obName}, secret); err != nil {
+	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, secret); err != nil {
 		errs = append(errs, fmt.Errorf("failed to get secret: %v", err))
 	}
 	return ob, cm, secret, errs
