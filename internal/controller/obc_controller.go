@@ -68,8 +68,11 @@ func (r *OBCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbuckets,verbs=get;update;delete
 //+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;update
 
 func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.ctx = ctx
@@ -229,14 +232,26 @@ func NewProviderClientForStorageClient(ctx context.Context, sc *v1alpha1.Storage
 // The names of the OB's are of the following format: "obc-<namespace_of_OBC>-<OBC_name>"
 func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, errs []error) {
 	obName := fmt.Sprintf("obc-%s-%s", obc.Namespace, obc.Name)
+	ob = &nbv1.ObjectBucket{}
 	if err := r.Get(r.ctx, types.NamespacedName{Name: obName}, ob); err != nil {
-		errs = append(errs, fmt.Errorf("failed to get OB: %v", err))
+		ob = nil
+		if !errors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("failed to get OB: %w", err))
+		}
 	}
+	cm = &corev1.ConfigMap{}
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, cm); err != nil {
-		errs = append(errs, fmt.Errorf("failed to get config map: %v", err))
+		cm = nil
+		if !errors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("failed to get config map: %w", err))
+		}
 	}
+	secret = &corev1.Secret{}
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, secret); err != nil {
-		errs = append(errs, fmt.Errorf("failed to get secret: %v", err))
+		secret = nil
+		if !errors.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("failed to get secret: %w", err))
+		}
 	}
 	return ob, cm, secret, errs
 }
