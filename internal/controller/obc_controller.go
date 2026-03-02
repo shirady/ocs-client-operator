@@ -33,9 +33,10 @@ const (
 // OBCReconciler reconciles a ObjectBucketClaim object
 type OBCReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	log    logr.Logger
-	ctx    context.Context
+	APIReader client.Reader // APIReader bypasses the cache; required when OBC is in a namespace outside WATCH_NAMESPACE
+	Scheme    *runtime.Scheme
+	log       logr.Logger
+	ctx       context.Context
 }
 
 // SetupWithManager sets up the controller with the Manager
@@ -227,6 +228,7 @@ func NewProviderClientForStorageClient(ctx context.Context, sc *v1alpha1.Storage
 // getResources gets the resources that were created as part of the OBC provisioning.
 // The names of the ConfigMap and Secret are always the same as the OBC name.
 // The names of the OB's are of the following format: "obc-<namespace_of_OBC>-<OBC_name>"
+// Uses APIReader for ConfigMap and Secret when OBC is in namespaces outside WATCH_NAMESPACE.
 func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, errs []error) {
 	obName := fmt.Sprintf("obc-%s-%s", obc.Namespace, obc.Name)
 	ob = &nbv1.ObjectBucket{}
@@ -237,14 +239,14 @@ func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.Obje
 		}
 	}
 	cm = &corev1.ConfigMap{}
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, cm); err != nil {
+	if err := r.APIReader.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, cm); err != nil {
 		cm = nil
 		if !errors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("failed to get config map: %w", err))
 		}
 	}
 	secret = &corev1.Secret{}
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, secret); err != nil {
+	if err := r.APIReader.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, secret); err != nil {
 		secret = nil
 		if !errors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("failed to get secret: %w", err))
@@ -305,7 +307,7 @@ func (r *OBCReconciler) releaseObcSecret(secret *corev1.Secret) (err error) {
 		r.log.Info("got nil secret, skipping")
 		return nil
 	}
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, secret); err != nil {
+	if err := r.APIReader.Get(r.ctx, types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, secret); err != nil {
 		r.log.Info("Failed to get secret", "namespaced/name", client.ObjectKeyFromObject(secret))
 		return fmt.Errorf("failed to get secret: %v", err)
 	}
@@ -329,7 +331,7 @@ func (r *OBCReconciler) releaseObcConfigMap(cm *corev1.ConfigMap) (err error) {
 		r.log.Info("got nil configmap, skipping")
 		return nil
 	}
-	if err := r.Get(r.ctx, types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, cm); err != nil {
+	if err := r.APIReader.Get(r.ctx, types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, cm); err != nil {
 		r.log.Info("Failed to get configmap", "namespaced/name", client.ObjectKeyFromObject(cm))
 		return fmt.Errorf("failed to get configmap: %v", err)
 	}
