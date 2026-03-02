@@ -230,9 +230,15 @@ func main() {
 					// only cache our validation webhook
 					Field: subscriptionwebhookSelector,
 				},
-				// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
+				// Watch ObjectBucketClaim and OBC-related resources in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
 				// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
 				&nbv1.ObjectBucketClaim{}: {
+					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+				},
+				&corev1.ConfigMap{}: {
+					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+				},
+				&corev1.Secret{}: {
 					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
 				},
 			},
