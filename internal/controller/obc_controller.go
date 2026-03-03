@@ -102,12 +102,11 @@ func (r *OBCReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return reconcile.Result{}, fmt.Errorf("failed to in Notify gRPC call of OBC deleted: %v", err)
 		}
 		r.log.Info("releasing OBC resources", "namespaced/name", client.ObjectKeyFromObject(obc))
-		var combinedErr error
-		ob, cm, secret := r.getResources(obc, &combinedErr)
-		if combinedErr != nil {
-			return reconcile.Result{}, combinedErr
+		ob, cm, secret, err := r.getResources(obc)
+		if err != nil {
+			return reconcile.Result{}, err
 		}
-		if err := r.deleteResources(ob, cm, secret, obc, &combinedErr); err != nil {
+		if err := r.deleteResources(ob, cm, secret, obc); err != nil {
 			r.log.Error(err, "failed to delete resources for OBC delete")
 			return reconcile.Result{}, fmt.Errorf("failed to delete resources for OBC delete: %v", err)
 		}
@@ -228,14 +227,14 @@ func NewProviderClientForStorageClient(ctx context.Context, sc *v1alpha1.Storage
 // getResources gets the resources that were created as part of the OBC provisioning.
 // The names of the ConfigMap and Secret are always the same as the OBC name.
 // The names of the OB's are of the following format: "obc-<namespace_of_OBC>-<OBC_name>"
-func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim, combinedErr *error) (ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret) {
+func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, combinedErr error) {
 	obName := fmt.Sprintf("obc-%s-%s", obc.Namespace, obc.Name)
 	ob = &nbv1.ObjectBucket{}
 	if err := r.Get(r.ctx, types.NamespacedName{Name: obName}, ob); err != nil {
 		ob = nil
 		if !errors.IsNotFound(err) {
 			r.log.Error(err, "failed to get OB", "name", obName)
-			multierr.AppendInto(combinedErr, err)
+			multierr.AppendInto(&combinedErr, err)
 		}
 	}
 	cm = &corev1.ConfigMap{}
@@ -243,7 +242,7 @@ func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim, combinedErr *e
 		cm = nil
 		if !errors.IsNotFound(err) {
 			r.log.Error(err, "failed to get config map", "namespace", obc.Namespace, "name", obc.Name)
-			multierr.AppendInto(combinedErr, err)
+			multierr.AppendInto(&combinedErr, err)
 		}
 	}
 	secret = &corev1.Secret{}
@@ -251,29 +250,29 @@ func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim, combinedErr *e
 		secret = nil
 		if !errors.IsNotFound(err) {
 			r.log.Error(err, "failed to get secret", "namespace", obc.Namespace, "name", obc.Name)
-			multierr.AppendInto(combinedErr, err)
+			multierr.AppendInto(&combinedErr, err)
 		}
 	}
-	return ob, cm, secret
+	return ob, cm, secret, combinedErr
 }
 
 // deleteResources handles the related resources that were created as part of the OBC provisioning
 // Since the secret and configmap's ownerReference is the OBC they will be garbage collected once their finalizers are removed.
 // The OB must be explicitly deleted since it is a global resource and cannot have a namespaced ownerReference.
-func (r *OBCReconciler) deleteResources(ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, obc *nbv1.ObjectBucketClaim, combinedErr *error) (err error) {
+func (r *OBCReconciler) deleteResources(ob *nbv1.ObjectBucket, cm *corev1.ConfigMap, secret *corev1.Secret, obc *nbv1.ObjectBucketClaim) (combinedErr error) {
 	if delErr := r.releaseAndDeleteOB(ob); delErr != nil {
 		r.log.Error(delErr, "error deleting OB", "name", ob.Name)
-		multierr.AppendInto(combinedErr, fmt.Errorf("failed to delete OB: %w", delErr))
+		multierr.AppendInto(&combinedErr, fmt.Errorf("failed to delete OB: %w", delErr))
 	}
 	if delErr := r.releaseObcSecret(secret); delErr != nil {
 		r.log.Error(delErr, "error releasing secret", "name", secret.Name, "namespace", secret.Namespace)
-		multierr.AppendInto(combinedErr, fmt.Errorf("failed to release secret: %w", delErr))
+		multierr.AppendInto(&combinedErr, fmt.Errorf("failed to release secret: %w", delErr))
 	}
 	if delErr := r.releaseObcConfigMap(cm); delErr != nil {
 		r.log.Error(delErr, "error releasing configMap", "name", cm.Name, "namespace", cm.Namespace)
-		multierr.AppendInto(combinedErr, fmt.Errorf("failed to release configMap: %w", delErr))
+		multierr.AppendInto(&combinedErr, fmt.Errorf("failed to release configMap: %w", delErr))
 	}
-	return nil
+	return combinedErr
 }
 
 // The OB does not have an ownerReference and must be explicitly deleted after its finalizer is removed.
