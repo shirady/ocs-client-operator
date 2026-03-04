@@ -232,26 +232,26 @@ func (r *OBCReconciler) getResources(obc *nbv1.ObjectBucketClaim) (ob *nbv1.Obje
 	ob = &nbv1.ObjectBucket{}
 	if err := r.Get(r.ctx, types.NamespacedName{Name: obName}, ob); err != nil {
 		ob = nil
-		if !errors.IsNotFound(err) {
-			r.log.Error(err, "failed to get OB", "name", obName)
-			multierr.AppendInto(&combinedErr, err)
-		}
+		// if !errors.IsNotFound(err) {
+		r.log.Error(err, "failed to get OB", "name", obName)
+		multierr.AppendInto(&combinedErr, err)
+		// }
 	}
 	cm = &corev1.ConfigMap{}
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, cm); err != nil {
 		cm = nil
-		if !errors.IsNotFound(err) {
-			r.log.Error(err, "failed to get config map", "namespace", obc.Namespace, "name", obc.Name)
-			multierr.AppendInto(&combinedErr, err)
-		}
+		// if !errors.IsNotFound(err) {
+		r.log.Error(err, "failed to get config map", "namespace", obc.Namespace, "name", obc.Name)
+		multierr.AppendInto(&combinedErr, err)
+		// }
 	}
 	secret = &corev1.Secret{}
 	if err := r.Get(r.ctx, types.NamespacedName{Namespace: obc.Namespace, Name: obc.Name}, secret); err != nil {
 		secret = nil
-		if !errors.IsNotFound(err) {
-			r.log.Error(err, "failed to get secret", "namespace", obc.Namespace, "name", obc.Name)
-			multierr.AppendInto(&combinedErr, err)
-		}
+		// if !errors.IsNotFound(err) {
+		r.log.Error(err, "failed to get secret", "namespace", obc.Namespace, "name", obc.Name)
+		multierr.AppendInto(&combinedErr, err)
+		// }
 	}
 	return ob, cm, secret, combinedErr
 }
