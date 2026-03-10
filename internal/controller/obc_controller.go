@@ -141,11 +141,20 @@ func (r *obcReconcile) createOrUpdatePhase(
 	storageClient *v1alpha1.StorageClient,
 ) (ctrl.Result, error) {
 	r.log.Info("OBC created/updated", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+
+	shouldUpdateMetaData := false
 	if controllerutil.AddFinalizer(&r.obc, ObcFinalizer) {
 		r.log.Info("Finalizer not found for OBC. Adding finalizer", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+		shouldUpdateMetaData = true
+	}
+	// this label is used to identify the StorageClient that the OBC is associated with
+	if utils.AddLabel(&r.obc, storageClientNameLabel, storageClient.Name) {
+		shouldUpdateMetaData = true
+	}
+	if shouldUpdateMetaData {
 		if err := r.Update(r.ctx, &r.obc); err != nil {
-			r.log.Info("Failed to add finalizer to OBC", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
-			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
+			r.log.Info("Failed to update OBC (finalizer/label)", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+			return reconcile.Result{}, fmt.Errorf("failed to update OBC: %v", err)
 		}
 		return reconcile.Result{Requeue: true}, nil
 	}
