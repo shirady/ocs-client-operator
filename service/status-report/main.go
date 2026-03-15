@@ -96,7 +96,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	providerClient, err := utils.NewProviderClientForStorageClient(ctx, storageClient.Spec.StorageProviderEndpoint)
+	providerClient, err := providerclient.NewProviderClient(
+		ctx,
+		storageClient.Spec.StorageProviderEndpoint,
+		utils.OcsClientTimeout,
+	)
 	if err != nil {
 		klog.Exitf("Failed to create grpc client with endpoint %v: %v", storageClient.Spec.StorageProviderEndpoint, err)
 	}

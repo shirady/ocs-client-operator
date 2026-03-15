@@ -110,10 +110,7 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient: %w", err)
 	}
 
-	ocsProviderClient, err := utils.NewProviderClientForStorageClient(
-		r.ctx,
-		storageClient.Spec.StorageProviderEndpoint,
-	)
+	ocsProviderClient, err := providerClient.NewProviderClient(r.ctx, storageClient.Spec.StorageProviderEndpoint, utils.OcsClientTimeout)
 	if err != nil {
 		r.log.Error(err, "failed to create provider client")
 		return reconcile.Result{}, err
