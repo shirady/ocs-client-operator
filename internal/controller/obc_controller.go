@@ -66,10 +66,10 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // reconcile is the main reconciliation loop for the OBC.
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespaced/name", req)
 	r.ctx = ctx
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespaced/name", client.ObjectKeyFromObject(&r.obc))
 
 	r.log.Info("Starting reconcile iteration for OBC")
 	if err := r.Get(r.ctx, req.NamespacedName, &r.obc); err != nil {
@@ -83,15 +83,8 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 
 	result, reconcileErr := r.reconcilePhases()
 
-	statusErr := r.Client.Status().Update(r.ctx, &r.obc)
-	if statusErr != nil {
-		r.log.Error(statusErr, "Failed to update OBC status")
-	}
 	if reconcileErr != nil {
 		return reconcile.Result{}, reconcileErr
-	}
-	if statusErr != nil {
-		return reconcile.Result{}, statusErr
 	}
 
 	return result, nil
