@@ -180,6 +180,16 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}); err != nil {
 		return fmt.Errorf("unable to set up FieldIndexer for client profile owner: %v", err)
 	}
+	if err := mgr.GetCache().IndexField(ctx, &nbv1.ObjectBucket{}, ownerUIDIndexName, func(obj client.Object) []string {
+		refs := obj.GetOwnerReferences()
+		owners := []string{}
+		for i := range refs {
+			owners = append(owners, string(refs[i].UID))
+		}
+		return owners
+	}); err != nil {
+		return fmt.Errorf("unable to set up FieldIndexer for object bucket (OB) owner: %v", err)
+	}
 	generationChangePredicate := predicate.GenerationChangedPredicate{}
 	enqueueStorageClients := handler.EnqueueRequestsFromMapFunc(
 		func(ctx context.Context, _ client.Object) []ctrl.Request {
@@ -252,7 +262,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=groupsnapshot.storage.openshift.io,resources=volumegroupsnapshotcontents,verbs=get;list;watch
 //+kubebuilder:rbac:groups=config.openshift.io,resources=dnses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=operators.coreos.com,resources=subscriptions,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbuckets,verbs=get;list;watch
 
 func (r *StorageClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	handler := storageClientReconcile{StorageClientReconciler: r}
@@ -561,10 +571,10 @@ func (r *storageClientReconcile) deletionPhase(externalClusterClient *providerCl
 		}
 	}
 
-	if exist, err := r.hasObjectbucketClaims(); err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to verify objectbucketclaims created by storageclient %q: %v", r.storageClient.Name, err)
+	if exist, err := r.hasObjectbucket(); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to verify object buckets (OB) created by storageclient %q: %v", r.storageClient.Name, err)
 	} else if exist {
-		return reconcile.Result{}, fmt.Errorf("one or more objectbucketclaims created by storageclient %s exist", r.storageClient.Name)
+		return reconcile.Result{}, fmt.Errorf("one or more object buckets created (OB) by storageclient %s exist", r.storageClient.Name)
 	}
 
 	if err := r.offboardConsumer(externalClusterClient); err != nil {
@@ -782,16 +792,13 @@ func (r *storageClientReconcile) hasOdfVolumeGroupSnapshotContents(clientProfile
 	return false, nil
 }
 
-func (r *storageClientReconcile) hasObjectbucketClaims() (bool, error) {
-	obcList := &nbv1.ObjectBucketClaimList{}
-	if err := r.list(obcList, client.MatchingLabels{storageClientNameLabel: r.storageClient.Name}, client.Limit(1)); err != nil {
-		if meta.IsNoMatchError(err) || kerrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to list object bucket claim resources: %v", err)
+func (r *storageClientReconcile) hasObjectbucket() (bool, error) {
+	obList := &nbv1.ObjectBucketList{}
+	if err := r.list(obList, client.MatchingFields{ownerUIDIndexName: string(r.storageClient.UID)}); err != nil {
+		return false, fmt.Errorf("failed to list object buckets owned by storageclient %s: %v", r.storageClient.Name, err)
 	}
-	if len(obcList.Items) != 0 {
-		r.log.Info(fmt.Sprintf("ObjectBucketClaim created by storageclient %s exists", r.storageClient.Name))
+	if len(obList.Items) != 0 {
+		r.log.Info(fmt.Sprintf("ObjectBucket (OB) referring storageclient %q exists", r.storageClient.Name))
 		return true, nil
 	}
 	return false, nil
