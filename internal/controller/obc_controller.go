@@ -15,7 +15,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -149,7 +148,7 @@ func (r *obcReconcile) handleObcDeletion(
 ) (ctrl.Result, error) {
 	r.log.Info("OBC deleted")
 
-	obcNamespacedName := types.NamespacedName{Namespace: r.obc.Namespace, Name: r.obc.Name}
+	obcNamespacedName := client.ObjectKeyFromObject(&r.obc)
 	if _, err := ocsProviderClient.NotifyObcDeleted(r.ctx, storageClient.Status.ConsumerID, obcNamespacedName); err != nil {
 		r.log.Error(err, "failed to notify provider of OBC deletion")
 		return reconcile.Result{}, fmt.Errorf("failed to call gRPC call Notify - NotifyObcDeleted: %w", err)
@@ -168,7 +167,7 @@ func (r *obcReconcile) handleObcDeletion(
 // getStorageClientFromStorageClass returns the StorageClient that owns the given StorageClass (via ownerReference).
 func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string) (*v1alpha1.StorageClient, error) {
 	sc := &storagev1.StorageClass{}
-	if err := r.Get(r.ctx, types.NamespacedName{Name: storageClassName}, sc); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: storageClassName}, sc); err != nil {
 		return nil, fmt.Errorf("get StorageClass %q: %w", storageClassName, err)
 	}
 	ownerStorageClientIndex := slices.IndexFunc(sc.OwnerReferences, func(owner metav1.OwnerReference) bool {
@@ -179,7 +178,7 @@ func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string)
 	}
 	storageClient := &v1alpha1.StorageClient{}
 	storageClientName := sc.OwnerReferences[ownerStorageClientIndex].Name
-	if err := r.Get(r.ctx, types.NamespacedName{Name: storageClientName}, storageClient); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: storageClientName}, storageClient); err != nil {
 		return nil, fmt.Errorf("get StorageClient %q (owner of StorageClass %q): %w", storageClientName, storageClassName, err)
 	}
 	return storageClient, nil
