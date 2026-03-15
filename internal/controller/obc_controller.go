@@ -113,10 +113,17 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 	}
 	defer ocsProviderClient.Close()
 
-	if !r.obc.GetDeletionTimestamp().IsZero() {
-		return r.deletionPhase(ocsProviderClient, storageClient)
+	if r.obc.GetDeletionTimestamp().IsZero() {
+		return r.handlerObcCreationOrUpdate(ocsProviderClient, storageClient)
+	} else {
+		return r.handleObcDeletion(ocsProviderClient, storageClient)
 	}
+}
 
+func (r *obcReconcile) handlerObcCreationOrUpdate(
+	ocsProviderClient *providerClient.OCSProviderClient,
+	storageClient *v1alpha1.StorageClient,
+) (ctrl.Result, error) {
 	r.log.Info("OBC created/updated", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
 
 	if controllerutil.AddFinalizer(&r.obc, nbv1.ObjectBucketFinalizer) {
@@ -132,12 +139,11 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 		return reconcile.Result{}, fmt.Errorf("failed to call gRPC call Notify - NotifyObcCreated: %w", err)
 	}
 	r.log.Info("Notify of OBC created/updated completed", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
-
 	return reconcile.Result{}, nil
 }
 
-// deletionPhase handles the deletion phase of the OBC reconciliation.
-func (r *obcReconcile) deletionPhase(
+// handleObcDeletion handles the deletion phase of the OBC reconciliation.
+func (r *obcReconcile) handleObcDeletion(
 	ocsProviderClient *providerClient.OCSProviderClient,
 	storageClient *v1alpha1.StorageClient,
 ) (ctrl.Result, error) {
