@@ -39,6 +39,7 @@ import (
 	groupsnapapi "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumegroupsnapshot/v1beta1"
 	snapapi "github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1"
 	nbapis "github.com/noobaa/noobaa-operator/v5/pkg/apis"
+	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
 	quotav1 "github.com/openshift/api/quota/v1"
@@ -53,6 +54,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -93,6 +95,16 @@ func init() {
 	utilruntime.Must(groupsnapapi.AddToScheme(scheme))
 	utilruntime.Must(odfgsapiv1b1.AddToScheme(scheme))
 	utilruntime.Must(csiaddonsv1alpha1.AddToScheme(scheme))
+	// ObjectBucketClaim/ObjectBucket (objectbucket.io); nbapis.AddToScheme does not register these types
+	// this part was added to avoid direct import of lib-bucket-provisioner
+	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
+	scheme.AddKnownTypes(objectBucketGV,
+		&nbv1.ObjectBucketClaim{},
+		&nbv1.ObjectBucketClaimList{},
+		&nbv1.ObjectBucket{},
+		&nbv1.ObjectBucketList{},
+	)
+	metav1.AddToGroupVersion(scheme, objectBucketGV)
 	//+kubebuilder:scaffold:scheme
 }
 
