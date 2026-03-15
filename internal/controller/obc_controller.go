@@ -67,12 +67,12 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // reconcile is the main reconciliation loop for the OBC.
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
 	r.ctx = ctx
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("ObjectBucketClaim", req.NamespacedName)
 
-	r.log.Info("Starting reconcile iteration for OBC", "req", req)
+	r.log.Info("Starting reconcile iteration for OBC")
 	if err := r.Get(r.ctx, req.NamespacedName, &r.obc); err != nil {
 		if kerrors.IsNotFound(err) {
 			r.log.Info("OBC resource not found. Ignoring since object must be deleted.")
@@ -82,15 +82,11 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 		return reconcile.Result{}, fmt.Errorf("failed to get OBC: %v", err)
 	}
 
-	initialPhase := r.obc.Status.Phase
 	result, reconcileErr := r.reconcilePhases()
 
-	var statusErr error
-	if r.obc.Status.Phase != initialPhase {
-		statusErr = r.Client.Status().Update(r.ctx, &r.obc)
-		if statusErr != nil {
-			r.log.Error(statusErr, "Failed to update OBC status.")
-		}
+	statusErr := r.Client.Status().Update(r.ctx, &r.obc)
+	if statusErr != nil {
+		r.log.Error(statusErr, "Failed to update OBC status.")
 	}
 	if reconcileErr != nil {
 		return reconcile.Result{}, reconcileErr
