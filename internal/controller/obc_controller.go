@@ -70,12 +70,12 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 	r.ctx = ctx
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("ObjectBucketClaim", req.NamespacedName)
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespaced/name", client.ObjectKeyFromObject(&r.obc))
 
 	r.log.Info("Starting reconcile iteration for OBC")
 	if err := r.Get(r.ctx, req.NamespacedName, &r.obc); err != nil {
 		if kerrors.IsNotFound(err) {
-			r.log.Info("OBC resource not found. Ignoring since object must be deleted.")
+			r.log.Info("OBC resource not found. Ignoring since object must be deleted")
 			return reconcile.Result{}, nil
 		}
 		r.log.Error(err, "failed to get OBC")
@@ -86,7 +86,7 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 
 	statusErr := r.Client.Status().Update(r.ctx, &r.obc)
 	if statusErr != nil {
-		r.log.Error(statusErr, "Failed to update OBC status.")
+		r.log.Error(statusErr, "Failed to update OBC status")
 	}
 	if reconcileErr != nil {
 		return reconcile.Result{}, reconcileErr
@@ -124,21 +124,21 @@ func (r *obcReconcile) handlerObcCreationOrUpdate(
 	ocsProviderClient *providerClient.OCSProviderClient,
 	storageClient *v1alpha1.StorageClient,
 ) (ctrl.Result, error) {
-	r.log.Info("OBC created/updated", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+	r.log.Info("OBC created/updated")
 
 	if controllerutil.AddFinalizer(&r.obc, nbv1.ObjectBucketFinalizer) {
-		r.log.Info("Finalizer not found for OBC. Adding finalizer", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+		r.log.Info("Finalizer not found for OBC. Adding finalizer")
 		if err := r.Update(r.ctx, &r.obc); err != nil {
-			r.log.Info("Failed to add finalizer to OBC", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+			r.log.Info("Failed to add finalizer to OBC")
 			return reconcile.Result{}, fmt.Errorf("failed to add finalizer to OBC: %v", err)
 		}
 	}
 
 	if _, err := ocsProviderClient.NotifyObcCreated(r.ctx, storageClient.Status.ConsumerID, &r.obc); err != nil {
-		r.log.Error(err, "failed to notify provider of OBC created/updated", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+		r.log.Error(err, "failed to notify provider of OBC created/updated")
 		return reconcile.Result{}, fmt.Errorf("failed to call gRPC call Notify - NotifyObcCreated: %w", err)
 	}
-	r.log.Info("Notify of OBC created/updated completed", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+	r.log.Info("Notify of OBC created/updated completed")
 	return reconcile.Result{}, nil
 }
 
@@ -147,18 +147,18 @@ func (r *obcReconcile) handleObcDeletion(
 	ocsProviderClient *providerClient.OCSProviderClient,
 	storageClient *v1alpha1.StorageClient,
 ) (ctrl.Result, error) {
-	r.log.Info("OBC deleted", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+	r.log.Info("OBC deleted")
 
 	obcNamespacedName := types.NamespacedName{Namespace: r.obc.Namespace, Name: r.obc.Name}
 	if _, err := ocsProviderClient.NotifyObcDeleted(r.ctx, storageClient.Status.ConsumerID, obcNamespacedName); err != nil {
-		r.log.Error(err, "failed to notify provider of OBC deletion", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+		r.log.Error(err, "failed to notify provider of OBC deletion")
 		return reconcile.Result{}, fmt.Errorf("failed to call gRPC call Notify - NotifyObcDeleted: %w", err)
 	}
-	r.log.Info("Notify of OBC deleted completed", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+	r.log.Info("Notify of OBC deleted completed")
 	if controllerutil.RemoveFinalizer(&r.obc, nbv1.ObjectBucketFinalizer) {
-		r.log.Info("removing finalizer from OBC", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+		r.log.Info("removing finalizer from OBC")
 		if err := r.Update(r.ctx, &r.obc); err != nil {
-			r.log.Info("Failed to remove finalizer from OBC", "namespaced/name", client.ObjectKeyFromObject(&r.obc))
+			r.log.Info("Failed to remove finalizer from OBC")
 			return reconcile.Result{}, fmt.Errorf("failed to remove finalizer from OBC: %v", err)
 		}
 	}
