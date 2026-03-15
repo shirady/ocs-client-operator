@@ -107,9 +107,8 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 
 	if r.obc.GetDeletionTimestamp().IsZero() {
 		return r.handlerObcCreationOrUpdate(ocsProviderClient, storageClient)
-	} else {
-		return r.handleObcDeletion(ocsProviderClient, storageClient)
 	}
+	return r.handleObcDeletion(ocsProviderClient, storageClient)
 }
 
 func (r *obcReconcile) handlerObcCreationOrUpdate(
