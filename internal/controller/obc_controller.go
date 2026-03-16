@@ -38,19 +38,11 @@ type obcReconcile struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Reconcile on Create, Delete, and Update when the object is being deleted or when the spec (generation) changes.
-	obcPredicate := predicate.Or(
-		predicate.GenerationChangedPredicate{},
-		predicate.NewPredicateFuncs(func(obj client.Object) bool {
-			return !obj.GetDeletionTimestamp().IsZero()
-		}),
-	)
-
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("ObjectBucketClaim").
 		For(
 			&nbv1.ObjectBucketClaim{},
-			builder.WithPredicates(obcPredicate),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}), // we filter out updates on status intentionally (it is updated from outside)
 		).
 		Complete(r)
 }
