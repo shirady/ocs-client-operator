@@ -794,7 +794,7 @@ func (r *storageClientReconcile) hasOdfVolumeGroupSnapshotContents(clientProfile
 
 func (r *storageClientReconcile) hasObjectbucket() (bool, error) {
 	obList := &nbv1.ObjectBucketList{}
-	if err := r.list(obList, client.MatchingFields{ownerUIDIndexName: string(r.storageClient.UID)}); err != nil {
+	if err := r.list(obList, client.MatchingFields{ownerUIDIndexName: string(r.storageClient.UID)}, client.Limit(1)); err != nil {
 		return false, fmt.Errorf("failed to list object buckets owned by storageclient %s: %v", r.storageClient.Name, err)
 	}
 	if len(obList.Items) != 0 {
