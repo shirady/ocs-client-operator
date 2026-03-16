@@ -58,7 +58,7 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // reconcile is the main reconciliation loop for the OBC.
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespaced/name", req)
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespacedName", req)
 	r.ctx = ctx
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
@@ -150,20 +150,21 @@ func (r *obcReconcile) handleObcDeletion(
 
 // getStorageClientFromStorageClass returns the StorageClient that owns the given StorageClass (via ownerReference).
 func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string) (*v1alpha1.StorageClient, error) {
-	sc := &storagev1.StorageClass{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: storageClassName}, sc); err != nil {
+	storageClass := &storagev1.StorageClass{}
+	storageClass.Name = storageClassName
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(storageClass), storageClass); err != nil {
 		return nil, fmt.Errorf("get StorageClass %q: %w", storageClassName, err)
 	}
-	ownerStorageClientIndex := slices.IndexFunc(sc.OwnerReferences, func(owner metav1.OwnerReference) bool {
+	ownerStorageClientIndex := slices.IndexFunc(storageClass.OwnerReferences, func(owner metav1.OwnerReference) bool {
 		return owner.Kind == "StorageClient"
 	})
 	if ownerStorageClientIndex == -1 {
 		return nil, fmt.Errorf("StorageClass %q has no StorageClient ownerReference", storageClassName)
 	}
 	storageClient := &v1alpha1.StorageClient{}
-	storageClientName := sc.OwnerReferences[ownerStorageClientIndex].Name
-	if err := r.Get(r.ctx, client.ObjectKey{Name: storageClientName}, storageClient); err != nil {
-		return nil, fmt.Errorf("get StorageClient %q (owner of StorageClass %q): %w", storageClientName, storageClassName, err)
+	storageClient.Name = storageClass.OwnerReferences[ownerStorageClientIndex].Name
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(storageClient), storageClient); err != nil {
+		return nil, fmt.Errorf("get StorageClient %q (owner of StorageClass %q): %w", storageClient.Name, storageClass.Name, err)
 	}
 	return storageClient, nil
 }
