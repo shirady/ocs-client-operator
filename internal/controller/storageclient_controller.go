@@ -184,7 +184,9 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		refs := obj.GetOwnerReferences()
 		owners := []string{}
 		for i := range refs {
-			owners = append(owners, string(refs[i].UID))
+			if refs[i].Kind == "StorageClient" {
+				owners = append(owners, string(refs[i].UID))
+			}
 		}
 		return owners
 	}); err != nil {
