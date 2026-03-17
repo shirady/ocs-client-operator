@@ -99,15 +99,15 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 
 	var result ctrl.Result
 	if r.obc.GetDeletionTimestamp().IsZero() {
-		result, err = r.handlerObcCreationOrUpdate(ocsProviderClient, storageClient)
+		result, err = r.handleObcCreationOrUpdate(ocsProviderClient, storageClient)
 	} else {
 		result, err = r.handleObcDeletion(ocsProviderClient, storageClient)
 	}
 	return result, err
 }
 
-// handlerObcCreationOrUpdate handles the creation or update phase of the OBC reconciliation.
-func (r *obcReconcile) handlerObcCreationOrUpdate(
+// handleObcCreationOrUpdate handles the creation or update phase of the OBC reconciliation.
+func (r *obcReconcile) handleObcCreationOrUpdate(
 	ocsProviderClient *providerClient.OCSProviderClient,
 	storageClient *v1alpha1.StorageClient,
 ) (ctrl.Result, error) {
