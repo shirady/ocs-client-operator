@@ -159,9 +159,11 @@ func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string)
 	if err := r.Get(r.ctx, client.ObjectKeyFromObject(storageClass), storageClass); err != nil {
 		return nil, fmt.Errorf("get StorageClass %q: %w", storageClassName, err)
 	}
-	ownerStorageClientIndex := slices.IndexFunc(storageClass.OwnerReferences, func(owner metav1.OwnerReference) bool {
-		return owner.Kind == "StorageClient"
-	})
+	ownerStorageClientIndex := slices.IndexFunc(
+		storageClass.OwnerReferences,
+		func(owner metav1.OwnerReference) bool {
+			return owner.Kind == "StorageClient"
+		})
 	if ownerStorageClientIndex == -1 {
 		return nil, fmt.Errorf("StorageClass %q has no StorageClient ownerReference", storageClassName)
 	}
