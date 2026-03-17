@@ -58,7 +58,7 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // reconcile is the main reconciliation loop for the OBC.
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
-	r.log = ctrl.LoggerFrom(ctx).WithName("OBC").WithValues("namespacedName", req)
+	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
 	r.ctx = ctx
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
