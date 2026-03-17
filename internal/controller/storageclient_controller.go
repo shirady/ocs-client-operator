@@ -800,7 +800,6 @@ func (r *storageClientReconcile) hasObjectbucket() (bool, error) {
 		return false, fmt.Errorf("failed to list object buckets owned by storageclient %s: %v", r.storageClient.Name, err)
 	}
 	if len(obList.Items) != 0 {
-		r.log.Info(fmt.Sprintf("ObjectBucket (OB) referring storageclient %q exists", r.storageClient.Name))
 		return true, nil
 	}
 	return false, nil
