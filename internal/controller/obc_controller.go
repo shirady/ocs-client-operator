@@ -23,7 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-const obcControllerFinalizer = "ocs-client-operator.ocs.openshift.io/obccleanup"
+const (
+	obcControllerFinalizer    = "ocs-client-operator.ocs.openshift.io/obccleanup"
+	storageClientNameLabelKey = "ocs-client-operator.ocs.openshift.io/storageclient"
+)
 
 // ObcReconciler reconciles a ObjectBucketClaim object
 type ObcReconciler struct {
@@ -122,15 +125,14 @@ func (r *obcReconcile) handleObcCreationOrUpdate(
 	}
 
 	// this label is used to identify the StorageClient that the OBC is associated with
-	if utils.AddLabel(&r.obc, storageClientNameLabel, storageClient.Name) {
+	if utils.AddLabel(&r.obc, storageClientNameLabelKey, storageClient.Name) {
 		r.log.Info("Label for StorageClient name not found for OBC. Adding label")
 		shouldUpdateMetaData = true
 	}
 
 	if shouldUpdateMetaData {
 		if err := r.Update(r.ctx, &r.obc); err != nil {
-			r.log.Info("Failed to update OBC metadata ((with finalizer or label)")
-			return reconcile.Result{}, fmt.Errorf("failed to update OBC metadata (with finalizer or label): %v", err)
+			return reconcile.Result{}, fmt.Errorf("failed to update OBC metadata: %v", err)
 		}
 	}
 
