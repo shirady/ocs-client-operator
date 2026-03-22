@@ -47,11 +47,12 @@ func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("ObjectBucketClaim").
 		For(
 			&nbv1.ObjectBucketClaim{},
+			// we filter out updates on status intentionally (it is updated from outside)
 			builder.WithPredicates(
 				predicate.Or(
 					predicate.GenerationChangedPredicate{},
 					predicate.LabelChangedPredicate{},
-				), // we filter out updates on status intentionally (it is updated from outside)
+				),
 			),
 		).
 		Complete(r)
