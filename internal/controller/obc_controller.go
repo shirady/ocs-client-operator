@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	obcControllerFinalizer    = "ocs-client-operator.ocs.openshift.io/obccleanup"
-	storageClientNameLabelKey = "ocs-client-operator.ocs.openshift.io/storageclient"
+	obcControllerFinalizer = "ocs.openshift.io/obccleanup"
 )
 
 // ObcReconciler reconciles a ObjectBucketClaim object
@@ -131,7 +130,7 @@ func (r *obcReconcile) handleObcCreationOrUpdate(
 	}
 
 	// this label is used to identify the StorageClient that the OBC is associated with
-	if utils.AddLabel(&r.obc, storageClientNameLabelKey, storageClient.Name) {
+	if utils.AddLabel(&r.obc, storageClientNameLabel, storageClient.Name) {
 		r.log.Info("Label for StorageClient name not found for OBC. Adding label")
 		shouldUpdateMetaData = true
 	}

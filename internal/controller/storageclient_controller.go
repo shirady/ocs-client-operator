@@ -784,7 +784,7 @@ func (r *storageClientReconcile) hasOdfVolumeGroupSnapshotContents(clientProfile
 
 func (r *storageClientReconcile) hasObjectbucketClaims() (bool, error) {
 	obcList := &nbv1.ObjectBucketClaimList{}
-	if err := r.list(obcList, client.MatchingLabels{storageClientNameLabelKey: r.storageClient.Name}, client.Limit(1)); err != nil {
+	if err := r.list(obcList, client.MatchingLabels{storageClientNameLabel: r.storageClient.Name}, client.Limit(1)); err != nil {
 		return false, fmt.Errorf("failed to list object bucket claim resources: %v", err)
 	}
 	return len(obcList.Items) != 0, nil
