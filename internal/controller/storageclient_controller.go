@@ -86,6 +86,8 @@ const (
 
 	VolumeGroupSnapshotClassCrdName    = "volumegroupsnapshotclasses.groupsnapshot.storage.k8s.io"
 	OdfVolumeGroupSnapshotClassCrdName = "volumegroupsnapshotclasses.groupsnapshot.storage.openshift.io"
+
+	ObjectBucketClaimCrdName = "objectbucketclaims.objectbucket.io"
 )
 
 var (
@@ -125,6 +127,7 @@ type StorageClientReconciler struct {
 	Scheme            *runtime.Scheme
 	OperatorNamespace string
 	OperatorPodName   string
+	AvailableCrds     map[string]bool
 
 	cache            cache.Cache
 	controller       controller.Controller
@@ -490,6 +493,12 @@ func (r *storageClientReconcile) reconcilePhases() (ctrl.Result, error) {
 	}
 	var combinedErr error
 	for _, kind := range kindsToReconcile {
+		if !r.AvailableCrds[ObjectBucketClaimCrdName] {
+			switch kind.(type) {
+			case *nbv1.ObjectBucketClaim, *nbv1.ObjectBucket:
+				continue
+			}
+		}
 		r.reconcileResourcesByGK(kind, kubeObjectsByGk, &combinedErr)
 	}
 	if combinedErr != nil {
@@ -786,6 +795,9 @@ func (r *storageClientReconcile) hasOdfVolumeGroupSnapshotContents(clientProfile
 }
 
 func (r *storageClientReconcile) hasObjectbucketClaims() (bool, error) {
+	if !r.AvailableCrds[ObjectBucketClaimCrdName] {
+		return false, nil
+	}
 	obcList := &nbv1.ObjectBucketClaimList{}
 	if err := r.list(obcList, client.MatchingLabels{storageClientNameLabel: r.storageClient.Name}, client.Limit(1)); err != nil {
 		return false, fmt.Errorf("failed to list object bucket claim resources: %v", err)

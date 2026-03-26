@@ -96,16 +96,8 @@ func init() {
 	utilruntime.Must(groupsnapapi.AddToScheme(scheme))
 	utilruntime.Must(odfgsapiv1b1.AddToScheme(scheme))
 	utilruntime.Must(csiaddonsv1alpha1.AddToScheme(scheme))
-	// ObjectBucketClaim/ObjectBucket (objectbucket.io); nbapis.AddToScheme does not register these types
-	// this part was added to avoid direct import of lib-bucket-provisioner
-	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
-	scheme.AddKnownTypes(objectBucketGV,
-		&nbv1.ObjectBucketClaim{},
-		&nbv1.ObjectBucketClaimList{},
-		&nbv1.ObjectBucket{},
-		&nbv1.ObjectBucketList{},
-	)
-	metav1.AddToGroupVersion(scheme, objectBucketGV)
+	// Do not register objectbucket.io types here. After listing CRDs, main calls registerObjectBucketScheme
+	// only if objectbucketclaims.objectbucket.io exists; otherwise ctrl.NewManager errors during discovery.
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -218,6 +210,45 @@ func main() {
 	}
 
 	subscriptionwebhookSelector := fields.SelectorFromSet(fields.Set{"metadata.name": templates.SubscriptionWebhookName})
+
+	// apiclient.New() returns a client without cache. cache is not initialized before mgr.Start()
+	// we need this because we need to watch for CRDs the operator is dependent on
+	apiClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		setupLog.Error(err, "Unable to get API client for CRD discovery")
+		os.Exit(1)
+	}
+	availCrds, err := getAvailableCRDNames(context.Background(), apiClient)
+	if err != nil {
+		setupLog.Error(err, "Unable get a list of available CRD names")
+		os.Exit(1)
+	}
+	if availCrds[controller.ObjectBucketClaimCrdName] {
+		registerObjectBucketScheme(scheme)
+	}
+
+	cacheByObject := map[client.Object]cache.ByObject{
+		&admrv1.ValidatingWebhookConfiguration{}: {
+			// only cache our validation webhook
+			Field: subscriptionwebhookSelector,
+		},
+		&corev1.ConfigMap{}: {
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		},
+		&corev1.Secret{}: {
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		},
+	}
+	if availCrds[controller.ObjectBucketClaimCrdName] {
+		// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
+		// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
+		cacheByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -225,23 +256,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7cb6f2e5.ocs.openshift.io",
 		Cache: cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
-				&admrv1.ValidatingWebhookConfiguration{}: {
-					// only cache our validation webhook
-					Field: subscriptionwebhookSelector,
-				},
-				// Watch ObjectBucketClaim and OBC-related resources in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
-				// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
-				&nbv1.ObjectBucketClaim{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-				},
-				&corev1.ConfigMap{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-				},
-				&corev1.Secret{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-				},
-			},
+			ByObject:          cacheByObject,
 			DefaultNamespaces: defaultNamespaces,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
@@ -267,22 +282,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// apiclient.New() returns a client without cache. cache is not initialized before mgr.Start()
-	// we need this because we need to watch for CRDs the operator is dependent on
-	apiClient, err := client.New(mgr.GetConfig(), client.Options{
-		Scheme: mgr.GetScheme(),
-	})
-	if err != nil {
-		setupLog.Error(err, "Unable to get Client")
-		os.Exit(1)
-	}
-
-	availCrds, err := getAvailableCRDNames(context.Background(), apiClient)
-	if err != nil {
-		setupLog.Error(err, "Unable get a list of available CRD names")
-		os.Exit(1)
-	}
-
 	podName, err := utils.GetOperatorPodName()
 	if err != nil {
 		setupLog.Error(err, "Failed to get operator pod name")
@@ -305,6 +304,7 @@ func main() {
 		Scheme:            mgr.GetScheme(),
 		OperatorNamespace: utils.GetOperatorNamespace(),
 		OperatorPodName:   podName,
+		AvailableCrds:     availCrds,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StorageClient")
 		os.Exit(1)
@@ -348,12 +348,14 @@ func main() {
 		}
 	}
 
-	if err = (&controller.ObcReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
-		os.Exit(1)
+	if availCrds[controller.ObjectBucketClaimCrdName] {
+		if err = (&controller.ObcReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager")
@@ -361,6 +363,19 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// registerObjectBucketScheme adds ObjectBucketClaim/ObjectBucket (objectbucket.io)
+// nbapis.AddToScheme does not register these types (this part was added to avoid direct import of lib-bucket-provisioner)
+func registerObjectBucketScheme(s *runtime.Scheme) {
+	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
+	s.AddKnownTypes(objectBucketGV,
+		&nbv1.ObjectBucketClaim{},
+		&nbv1.ObjectBucketClaimList{},
+		&nbv1.ObjectBucket{},
+		&nbv1.ObjectBucketList{},
+	)
+	metav1.AddToGroupVersion(s, objectBucketGV)
 }
 
 func getAvailableCRDNames(ctx context.Context, cl client.Client) (map[string]bool, error) {
