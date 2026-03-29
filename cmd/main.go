@@ -239,12 +239,6 @@ func main() {
 			// only cache our validation webhook
 			Field: subscriptionwebhookSelector,
 		},
-		&corev1.ConfigMap{}: {
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		},
-		&corev1.Secret{}: {
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		},
 	}
 	if availCrds[controller.ObjectBucketClaimCrdName] {
 		// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
