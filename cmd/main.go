@@ -50,7 +50,6 @@ import (
 	odfgsapiv1b1 "github.com/red-hat-storage/external-snapshotter/client/v8/apis/volumegroupsnapshot/v1beta1"
 	admrv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -229,17 +228,6 @@ func main() {
 				&admrv1.ValidatingWebhookConfiguration{}: {
 					// only cache our validation webhook
 					Field: subscriptionwebhookSelector,
-				},
-				// Watch ObjectBucketClaim and OBC-related resources in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
-				// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
-				&nbv1.ObjectBucketClaim{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-				},
-				&corev1.ConfigMap{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-				},
-				&corev1.Secret{}: {
-					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
 				},
 			},
 			DefaultNamespaces: defaultNamespaces,
