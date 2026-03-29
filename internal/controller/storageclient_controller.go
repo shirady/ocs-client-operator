@@ -127,7 +127,6 @@ type StorageClientReconciler struct {
 	Scheme            *runtime.Scheme
 	OperatorNamespace string
 	OperatorPodName   string
-	AvailableCrds     map[string]bool
 
 	cache            cache.Cache
 	controller       controller.Controller
