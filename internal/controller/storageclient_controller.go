@@ -493,12 +493,6 @@ func (r *storageClientReconcile) reconcilePhases() (ctrl.Result, error) {
 	}
 	var combinedErr error
 	for _, kind := range kindsToReconcile {
-		if !r.AvailableCrds[ObjectBucketClaimCrdName] {
-			switch kind.(type) {
-			case *nbv1.ObjectBucketClaim, *nbv1.ObjectBucket:
-				continue
-			}
-		}
 		r.reconcileResourcesByGK(kind, kubeObjectsByGk, &combinedErr)
 	}
 	if combinedErr != nil {
