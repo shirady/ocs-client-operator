@@ -225,7 +225,7 @@ func main() {
 		Scheme: scheme,
 	})
 	if err != nil {
-		setupLog.Error(err, "Unable to get API client for CRD discovery")
+		setupLog.Error(err, "Unable to get API client")
 		os.Exit(1)
 	}
 	availCrds, err := getAvailableCRDNames(context.Background(), apiClient)
