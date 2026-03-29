@@ -337,12 +337,14 @@ func main() {
 		}
 	}
 
-	if err = (&controller.ObcReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
-		os.Exit(1)
+	if availCrds[controller.ObjectBucketClaimCrdName] {
+		if err = (&controller.ObcReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager")
