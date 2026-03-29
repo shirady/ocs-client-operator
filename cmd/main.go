@@ -218,42 +218,6 @@ func main() {
 	}
 
 	subscriptionwebhookSelector := fields.SelectorFromSet(fields.Set{"metadata.name": templates.SubscriptionWebhookName})
-
-	// apiclient.New() returns a client without cache. cache is not initialized before mgr.Start()
-	// we need this because we need to watch for CRDs the operator is dependent on
-	apiClient, err := client.New(ctrl.GetConfigOrDie(), client.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		setupLog.Error(err, "Unable to get API client for CRD discovery")
-		os.Exit(1)
-	}
-	availCrds, err := getAvailableCRDNames(context.Background(), apiClient)
-	if err != nil {
-		setupLog.Error(err, "Unable get a list of available CRD names")
-		os.Exit(1)
-	}
-
-	cacheByObject := map[client.Object]cache.ByObject{
-		&admrv1.ValidatingWebhookConfiguration{}: {
-			// only cache our validation webhook
-			Field: subscriptionwebhookSelector,
-		},
-		&corev1.ConfigMap{}: {
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		},
-		&corev1.Secret{}: {
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		},
-	}
-	if availCrds[controller.ObjectBucketClaimCrdName] {
-		// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
-		// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
-		cacheByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		}
-	}
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -261,7 +225,23 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7cb6f2e5.ocs.openshift.io",
 		Cache: cache.Options{
-			ByObject:          cacheByObject,
+			ByObject: map[client.Object]cache.ByObject{
+				&admrv1.ValidatingWebhookConfiguration{}: {
+					// only cache our validation webhook
+					Field: subscriptionwebhookSelector,
+				},
+				// Watch ObjectBucketClaim and OBC-related resources in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
+				// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
+				&nbv1.ObjectBucketClaim{}: {
+					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+				},
+				&corev1.ConfigMap{}: {
+					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+				},
+				&corev1.Secret{}: {
+					Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+				},
+			},
 			DefaultNamespaces: defaultNamespaces,
 		},
 		WebhookServer: webhook.NewServer(webhook.Options{
@@ -284,6 +264,22 @@ func main() {
 	err = utils.ValidateStausReporterImage()
 	if err != nil {
 		setupLog.Error(err, "unable to validate status reporter image")
+		os.Exit(1)
+	}
+
+	// apiclient.New() returns a client without cache. cache is not initialized before mgr.Start()
+	// we need this because we need to watch for CRDs the operator is dependent on
+	apiClient, err := client.New(mgr.GetConfig(), client.Options{
+		Scheme: mgr.GetScheme(),
+	})
+	if err != nil {
+		setupLog.Error(err, "Unable to get Client")
+		os.Exit(1)
+	}
+
+	availCrds, err := getAvailableCRDNames(context.Background(), apiClient)
+	if err != nil {
+		setupLog.Error(err, "Unable get a list of available CRD names")
 		os.Exit(1)
 	}
 
@@ -353,14 +349,12 @@ func main() {
 		}
 	}
 
-	if availCrds[controller.ObjectBucketClaimCrdName] {
-		if err = (&controller.ObcReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
-			os.Exit(1)
-		}
+	if err = (&controller.ObcReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
+		os.Exit(1)
 	}
 
 	setupLog.Info("starting manager")
