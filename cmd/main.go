@@ -96,8 +96,16 @@ func init() {
 	utilruntime.Must(groupsnapapi.AddToScheme(scheme))
 	utilruntime.Must(odfgsapiv1b1.AddToScheme(scheme))
 	utilruntime.Must(csiaddonsv1alpha1.AddToScheme(scheme))
-	// Do not register objectbucket.io types here. After listing CRDs, main calls registerObjectBucketScheme
-	// only if objectbucketclaims.objectbucket.io exists; otherwise ctrl.NewManager errors during discovery.
+	// ObjectBucketClaim/ObjectBucket (objectbucket.io); nbapis.AddToScheme does not register these types
+	// this part was added to avoid direct import of lib-bucket-provisioner
+	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
+	scheme.AddKnownTypes(objectBucketGV,
+		&nbv1.ObjectBucketClaim{},
+		&nbv1.ObjectBucketClaimList{},
+		&nbv1.ObjectBucket{},
+		&nbv1.ObjectBucketList{},
+	)
+	metav1.AddToGroupVersion(scheme, objectBucketGV)
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -224,9 +232,6 @@ func main() {
 	if err != nil {
 		setupLog.Error(err, "Unable get a list of available CRD names")
 		os.Exit(1)
-	}
-	if availCrds[controller.ObjectBucketClaimCrdName] {
-		registerObjectBucketScheme(scheme)
 	}
 
 	cacheByObject := map[client.Object]cache.ByObject{
@@ -363,19 +368,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-// registerObjectBucketScheme adds ObjectBucketClaim/ObjectBucket (objectbucket.io)
-// nbapis.AddToScheme does not register these types (this part was added to avoid direct import of lib-bucket-provisioner)
-func registerObjectBucketScheme(s *runtime.Scheme) {
-	objectBucketGV := schema.GroupVersion{Group: "objectbucket.io", Version: "v1alpha1"}
-	s.AddKnownTypes(objectBucketGV,
-		&nbv1.ObjectBucketClaim{},
-		&nbv1.ObjectBucketClaimList{},
-		&nbv1.ObjectBucket{},
-		&nbv1.ObjectBucketList{},
-	)
-	metav1.AddToGroupVersion(s, objectBucketGV)
 }
 
 func getAvailableCRDNames(ctx context.Context, cl client.Client) (map[string]bool, error) {
