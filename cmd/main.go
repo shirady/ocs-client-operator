@@ -360,7 +360,11 @@ func getAvailableCRDNames(ctx context.Context, cl client.Client) (map[string]boo
 	return crdExist, nil
 }
 
-func buildCacheAvailableCRDs(availCrds map[string]bool, subscriptionwebhookSelector fields.Selector, defaultNamespaces map[string]cache.Config) cache.Options {
+func buildCacheAvailableCRDs(
+	availCrds map[string]bool,
+	subscriptionwebhookSelector fields.Selector,
+	defaultNamespaces map[string]cache.Config,
+) cache.Options {
 	cacheAvailableCrd := cache.Options{
 		ByObject: map[client.Object]cache.ByObject{
 			&admrv1.ValidatingWebhookConfiguration{}: {
