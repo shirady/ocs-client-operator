@@ -371,6 +371,12 @@ func buildCacheAvailableCRDs(
 				// only cache our validation webhook
 				Field: subscriptionwebhookSelector,
 			},
+			&corev1.ConfigMap{}: {
+				Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+			},
+			&corev1.Secret{}: {
+				Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+			},
 		},
 		DefaultNamespaces: defaultNamespaces,
 	}
@@ -378,12 +384,6 @@ func buildCacheAvailableCRDs(
 	// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
 	if availCrds[controller.ObjectBucketClaimCrdName] {
 		cacheAvailableCrd.ByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		}
-		cacheAvailableCrd.ByObject[&corev1.ConfigMap{}] = cache.ByObject{
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		}
-		cacheAvailableCrd.ByObject[&corev1.Secret{}] = cache.ByObject{
 			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
 		}
 	}
