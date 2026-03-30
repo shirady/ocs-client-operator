@@ -86,8 +86,8 @@ const (
 
 	VolumeGroupSnapshotClassCrdName    = "volumegroupsnapshotclasses.groupsnapshot.storage.k8s.io"
 	OdfVolumeGroupSnapshotClassCrdName = "volumegroupsnapshotclasses.groupsnapshot.storage.openshift.io"
-
-	ObjectBucketClaimCrdName = "objectbucketclaims.objectbucket.io"
+	ObjectBucketClaimCrdName           = "objectbucketclaims.objectbucket.io"
+	ObjectBucketCrdName                = "objectbuckets.objectbucket.io"
 )
 
 var (
@@ -206,6 +206,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&batchv1.CronJob{}).
 		Owns(&quotav1.ClusterResourceQuota{}, builder.WithPredicates(generationChangePredicate)).
 		Owns(&corev1.Secret{}).
+		Owns(&corev1.ConfigMap{}).
 		Owns(&csiopv1.CephConnection{}, builder.WithPredicates(generationChangePredicate)).
 		Owns(&csiopv1.ClientProfileMapping{}, builder.WithPredicates(generationChangePredicate)).
 		Owns(&storagev1.StorageClass{}).
@@ -230,6 +231,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.cache = mgr.GetCache()
 	r.crdsBeingWatched.Store(VolumeGroupSnapshotClassCrdName, false)
 	r.crdsBeingWatched.Store(OdfVolumeGroupSnapshotClassCrdName, false)
+	r.crdsBeingWatched.Store(ObjectBucketCrdName, false)
 
 	return err
 }
@@ -303,6 +305,10 @@ func (r *storageClientReconcile) reconcileDynamicWatches() error {
 	}
 
 	if err := r.reconcileOdfVolumeGroupSnapshot(); err != nil {
+		return err
+	}
+
+	if err := r.reconcileObjectBucket(); err != nil {
 		return err
 	}
 	return nil
@@ -417,6 +423,27 @@ func (r *storageClientReconcile) reconcileOdfVolumeGroupSnapshot() error {
 		return fmt.Errorf("unable to set up FieldIndexer for VGSC csi driver name: %v", err)
 	}
 	r.crdsBeingWatched.Store(OdfVolumeGroupSnapshotClassCrdName, true)
+	return nil
+}
+
+func (r *storageClientReconcile) reconcileObjectBucket() error {
+	if watchExists, foundCrd := r.crdsBeingWatched.Load(ObjectBucketCrdName); !foundCrd || watchExists.(bool) {
+		return nil
+	}
+
+	crd := &metav1.PartialObjectMetadata{}
+	crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+	crd.Name = ObjectBucketCrdName
+	if err := r.get(crd); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+	// CRD doesn't exist in the cluster
+	if crd.UID == "" {
+		return nil
+	}
+
+	// establish a watch
+
 	return nil
 }
 
@@ -791,6 +818,7 @@ func (r *storageClientReconcile) hasObjectbucketClaims() (bool, error) {
 	obcList := &nbv1.ObjectBucketClaimList{}
 	if err := r.list(obcList, client.MatchingLabels{storageClientNameLabel: r.storageClient.Name}, client.Limit(1)); err != nil {
 		if meta.IsNoMatchError(err) {
+			r.log.Info("ObjectBucketClaim CRD is not installed, skipping object bucket claim check")
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to list object bucket claim resources: %v", err)
