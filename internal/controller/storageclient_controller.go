@@ -260,6 +260,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=config.openshift.io,resources=dnses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=operators.coreos.com,resources=subscriptions,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch
+//+kubebuilder:rbac:groups=objectbucket.io,resources=objectbuckets,verbs=get;list;watch
 
 func (r *StorageClientReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	handler := storageClientReconcile{StorageClientReconciler: r}
@@ -443,7 +444,25 @@ func (r *storageClientReconcile) reconcileObjectBucket() error {
 	}
 
 	// establish a watch
+	if err := r.controller.Watch(
+		source.Kind(
+			r.cache,
+			client.Object(&nbv1.ObjectBucket{}),
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []ctrl.Request {
+				owner := metav1.GetControllerOf(o)
+				if owner != nil &&
+					owner.Kind == "StorageClient" &&
+					owner.APIVersion == v1alpha1.GroupVersion.String() {
+					return []ctrl.Request{{NamespacedName: types.NamespacedName{Name: owner.Name}}}
+				}
+				return nil
+			}),
+		),
+	); err != nil {
+		return fmt.Errorf("failed to setup dynamic watch on %s: %v", crd.Name, err)
+	}
 
+	r.crdsBeingWatched.Store(ObjectBucketCrdName, true)
 	return nil
 }
 
