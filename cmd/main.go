@@ -234,30 +234,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	cacheByObject := map[client.Object]cache.ByObject{
-		&admrv1.ValidatingWebhookConfiguration{}: {
-			// only cache our validation webhook
-			Field: subscriptionwebhookSelector,
-		},
-	}
-	if availCrds[controller.ObjectBucketClaimCrdName] {
-		// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
-		// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
-		cacheByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
-			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
-		}
-	}
-
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7cb6f2e5.ocs.openshift.io",
-		Cache: cache.Options{
-			ByObject:          cacheByObject,
-			DefaultNamespaces: defaultNamespaces,
-		},
+		Cache:                  buildCacheAvailableCRDs(availCrds, subscriptionwebhookSelector, defaultNamespaces),
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:    webhookPort,
 			CertDir: "/etc/tls/private",
@@ -375,4 +358,30 @@ func getAvailableCRDNames(ctx context.Context, cl client.Client) (map[string]boo
 		crdExist[crdList.Items[i].Name] = true
 	}
 	return crdExist, nil
+}
+
+func buildCacheAvailableCRDs(availCrds map[string]bool, subscriptionwebhookSelector fields.Selector, defaultNamespaces map[string]cache.Config) cache.Options {
+	cacheAvailableCrd := cache.Options{
+		ByObject: map[client.Object]cache.ByObject{
+			&admrv1.ValidatingWebhookConfiguration{}: {
+				// only cache our validation webhook
+				Field: subscriptionwebhookSelector,
+			},
+		},
+		DefaultNamespaces: defaultNamespaces,
+	}
+	// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
+	// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
+	if availCrds[controller.ObjectBucketClaimCrdName] {
+		cacheAvailableCrd.ByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		}
+		cacheAvailableCrd.ByObject[&corev1.ConfigMap{}] = cache.ByObject{
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		}
+		cacheAvailableCrd.ByObject[&corev1.Secret{}] = cache.ByObject{
+			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
+		}
+	}
+	return cacheAvailableCrd
 }
