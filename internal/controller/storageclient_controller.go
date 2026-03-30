@@ -313,6 +313,7 @@ func (r *storageClientReconcile) reconcileDynamicWatches() error {
 	if err := r.reconcileObjectBucket(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
