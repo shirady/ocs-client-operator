@@ -310,7 +310,7 @@ func (r *storageClientReconcile) reconcileDynamicWatches() error {
 		return err
 	}
 
-	if err := r.reconcileObjectBucket(); err != nil {
+	if err := r.setupObjectBucketWatch(); err != nil {
 		return err
 	}
 
@@ -429,7 +429,7 @@ func (r *storageClientReconcile) reconcileOdfVolumeGroupSnapshot() error {
 	return nil
 }
 
-func (r *storageClientReconcile) reconcileObjectBucket() error {
+func (r *storageClientReconcile) setupObjectBucketWatch() error {
 	if watchExists, foundCrd := r.crdsBeingWatched.Load(ObjectBucketCrdName); !foundCrd || watchExists.(bool) {
 		return nil
 	}
