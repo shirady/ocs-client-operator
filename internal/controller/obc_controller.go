@@ -40,6 +40,10 @@ type ObcReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
+	// AvailableCrds is a snapshot from process start (see cmd/main). If it disagrees with whether the
+	// ObjectBucketClaim CRD currently exists, we exit so the pod can restart with a correct cache.
+	AvailableCrds map[string]bool
+
 	controller controller.Controller
 	cache      cache.Cache
 
@@ -138,6 +142,14 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
 	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
 	r.ctx = ctx
+
+	crd := &metav1.PartialObjectMetadata{}
+	crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+	crd.Name = ObjectBucketClaimCrdName
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(crd), crd); client.IgnoreNotFound(err) != nil {
+		return reconcile.Result{}, err
+	}
+	utils.AssertEqual(r.AvailableCrds[ObjectBucketClaimCrdName], crd.UID != "", utils.ExitCodeThatShouldRestartTheProcess)
 
 	if err := r.reconcileDynamicWatches(); err != nil {
 		return reconcile.Result{}, err

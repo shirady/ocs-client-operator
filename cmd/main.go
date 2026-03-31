@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	apiv1alpha1 "github.com/red-hat-storage/ocs-client-operator/api/v1alpha1"
 	"github.com/red-hat-storage/ocs-client-operator/internal/controller"
@@ -65,6 +66,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -330,11 +332,41 @@ func main() {
 	}
 
 	if err = (&controller.ObcReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		AvailableCrds: availCrds,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaim")
 		os.Exit(1)
+	}
+
+	// Controller-runtime cache options for ObjectBucketClaim are fixed at NewManager time. If the OBC CRD
+	// was not registered then, we cannot add cluster-wide OBC caching without a new process.
+	if !availCrds[controller.ObjectBucketClaimCrdName] {
+		setupLog.Info("ObjectBucketClaim CRD not in API discovery at startup; will exit when it appears so the workload restarts this process with a correct cache")
+		if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+			ticker := time.NewTicker(15 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return nil
+				case <-ticker.C:
+					curAvailCrds, err := getAvailableCRDNames(context.Background(), apiClient)
+					if err != nil {
+						setupLog.Error(err, "failed to list CRDs while waiting for ObjectBucketClaim CRD")
+						continue
+					}
+					if curAvailCrds[controller.ObjectBucketClaimCrdName] {
+						setupLog.Info("ObjectBucketClaim CRD is now in API discovery; exiting process so the pod can restart with cluster-wide OBC cache")
+						os.Exit(0)
+					}
+				}
+			}
+		})); err != nil {
+			setupLog.Error(err, "unable to register ObjectBucketClaim CRD discovery runnable")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting manager")
@@ -380,6 +412,8 @@ func buildCacheAvailableCRDs(
 	}
 	// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
 	// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
+	// Requires the CRD to exist at process start (REST mapper). If it was missing, main registers a runnable
+	// that exits the process when the CRD appears so the pod restarts with this block populated.
 	if availCrds[controller.ObjectBucketClaimCrdName] {
 		cacheAvailableCrd.ByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
 			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
