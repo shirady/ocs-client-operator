@@ -145,14 +145,15 @@ func (r *obcReconcile) setupObjectBucketClaimWatch() error {
 		return nil
 	}
 
-	crd := &metav1.PartialObjectMetadata{}
-	crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+	crd := &extv1.CustomResourceDefinition{}
 	crd.Name = ObjectBucketClaimCrdName
-	if err := r.Get(r.ctx, client.ObjectKeyFromObject(crd), crd); client.IgnoreNotFound(err) != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: ObjectBucketClaimCrdName}, crd); client.IgnoreNotFound(err) != nil {
 		return err
 	}
-	// CRD doesn't exist in the cluster
 	if crd.UID == "" {
+		return nil
+	}
+	if !crdEstablished(crd) {
 		return nil
 	}
 
