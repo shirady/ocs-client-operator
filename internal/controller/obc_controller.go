@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/red-hat-storage/ocs-client-operator/api/v1alpha1"
 	"github.com/red-hat-storage/ocs-client-operator/pkg/utils"
@@ -24,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -84,10 +86,43 @@ func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.OnlyMetadata,
 		).
 		Build(r)
+	if err != nil {
+		return err
+	}
 
 	r.controller = controller
 	r.cache = mgr.GetCache()
-	return err
+
+	// Register the OBC Kind watch as soon as the CRD is Established, without requiring a prior
+	// reconcile. Otherwise: CRD handler only enqueues when it lists existing OBCs — if there were
+	// none at startup, the first OBC create never triggers reconcile and the watch is never added.
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		if !mgr.GetCache().WaitForCacheSync(ctx) {
+			return ctx.Err()
+		}
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			if err := r.setupObjectBucketClaimWatch(ctx); err != nil {
+				return err
+			}
+			r.obcWatchMu.Lock()
+			done := r.obcWatchInstalled
+			r.obcWatchMu.Unlock()
+			if done {
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-ticker.C:
+			}
+		}
+	})); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update
@@ -131,14 +166,15 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 }
 
 func (r *obcReconcile) reconcileDynamicWatches() error {
-	if err := r.setupObjectBucketClaimWatch(); err != nil {
+	if err := r.setupObjectBucketClaimWatch(r.ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *obcReconcile) setupObjectBucketClaimWatch() error {
+// setupObjectBucketClaimWatch registers a cache-backed watch on ObjectBucketClaim once the CRD exists and is Established.
+func (r *ObcReconciler) setupObjectBucketClaimWatch(ctx context.Context) error {
 	r.obcWatchMu.Lock()
 	defer r.obcWatchMu.Unlock()
 	if r.obcWatchInstalled {
@@ -147,7 +183,7 @@ func (r *obcReconcile) setupObjectBucketClaimWatch() error {
 
 	crd := &extv1.CustomResourceDefinition{}
 	crd.Name = ObjectBucketClaimCrdName
-	if err := r.Get(r.ctx, client.ObjectKey{Name: ObjectBucketClaimCrdName}, crd); client.IgnoreNotFound(err) != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: ObjectBucketClaimCrdName}, crd); client.IgnoreNotFound(err) != nil {
 		return err
 	}
 	if crd.UID == "" {
@@ -157,7 +193,6 @@ func (r *obcReconcile) setupObjectBucketClaimWatch() error {
 		return nil
 	}
 
-	// establish a watch
 	if err := r.controller.Watch(
 		source.Kind(
 			r.cache,
