@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/red-hat-storage/ocs-client-operator/api/v1alpha1"
 	"github.com/red-hat-storage/ocs-client-operator/pkg/utils"
@@ -12,15 +13,20 @@ import (
 	"github.com/go-logr/logr"
 	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
 	storagev1 "k8s.io/api/storage/v1"
+	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -31,6 +37,12 @@ const (
 type ObcReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	controller controller.Controller
+	cache      cache.Cache
+
+	obcWatchMu        sync.Mutex
+	obcWatchInstalled bool
 }
 
 type obcReconcile struct {
@@ -42,19 +54,40 @@ type obcReconcile struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	enqueueObjectBucketClaims := handler.EnqueueRequestsFromMapFunc(
+		func(ctx context.Context, _ client.Object) []ctrl.Request {
+			obcList := &nbv1.ObjectBucketClaimList{}
+			if err := r.Client.List(ctx, obcList); err != nil {
+				return []ctrl.Request{}
+			}
+			requests := make([]ctrl.Request, len(obcList.Items))
+			for idx := range obcList.Items {
+				requests[idx] = ctrl.Request{
+					NamespacedName: client.ObjectKeyFromObject(&obcList.Items[idx]),
+				}
+			}
+			return requests
+		},
+	)
+
+	controller, err := ctrl.NewControllerManagedBy(mgr).
 		Named("ObjectBucketClaim").
-		For(
-			&nbv1.ObjectBucketClaim{},
-			// we filter out updates on status intentionally (it is updated from outside)
+		Watches(
+			&extv1.CustomResourceDefinition{},
+			enqueueObjectBucketClaims,
 			builder.WithPredicates(
-				predicate.Or(
-					predicate.GenerationChangedPredicate{},
-					predicate.LabelChangedPredicate{},
+				predicate.And(
+					utils.NamePredicate(ObjectBucketClaimCrdName),
+					utils.EventTypePredicate(true, false, false, false),
 				),
 			),
+			builder.OnlyMetadata,
 		).
-		Complete(r)
+		Build(r)
+
+	r.controller = controller
+	r.cache = mgr.GetCache()
+	return err
 }
 
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update
@@ -70,6 +103,11 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
 	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
 	r.ctx = ctx
+
+	if err := r.reconcileDynamicWatches(); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	r.obc.Name = req.Name
 	r.obc.Namespace = req.Namespace
 
@@ -90,6 +128,52 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 	}
 
 	return result, nil
+}
+
+func (r *obcReconcile) reconcileDynamicWatches() error {
+	if err := r.setupObjectBucketClaimWatch(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *obcReconcile) setupObjectBucketClaimWatch() error {
+	r.obcWatchMu.Lock()
+	defer r.obcWatchMu.Unlock()
+	if r.obcWatchInstalled {
+		return nil
+	}
+
+	crd := &metav1.PartialObjectMetadata{}
+	crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+	crd.Name = ObjectBucketClaimCrdName
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(crd), crd); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+	// CRD doesn't exist in the cluster
+	if crd.UID == "" {
+		return nil
+	}
+
+	// establish a watch
+	if err := r.controller.Watch(
+		source.Kind(
+			r.cache,
+			client.Object(&nbv1.ObjectBucketClaim{}),
+			&handler.EnqueueRequestForObject{},
+			// we filter out updates on status intentionally (it is updated from outside)
+			predicate.Or(
+				predicate.GenerationChangedPredicate{},
+				predicate.LabelChangedPredicate{},
+			),
+		),
+	); err != nil {
+		return fmt.Errorf("failed to setup dynamic watch on %s: %v", crd.Name, err)
+	}
+
+	r.obcWatchInstalled = true
+	return nil
 }
 
 // reconcilePhases handles the different phases of the OBC reconciliation.
