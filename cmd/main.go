@@ -385,9 +385,7 @@ func buildCacheAvailableCRDs(
 	subscriptionwebhookSelector := fields.SelectorFromSet(fields.Set{"metadata.name": templates.SubscriptionWebhookName})
 	noobaaLabelSelector := labels.SelectorFromSet(labels.Set{"app": "noobaa"})
 	configMapAndSecretCacheByNamespace := map[string]cache.Config{
-		operatorNamespace: {
-			LabelSelector: labels.Everything(),
-		},
+		operatorNamespace: {},
 		cache.AllNamespaces: {
 			LabelSelector: noobaaLabelSelector,
 		},
