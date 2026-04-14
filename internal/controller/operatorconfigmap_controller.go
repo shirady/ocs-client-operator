@@ -74,7 +74,6 @@ const (
 	// ClusterVersionName is the name of the ClusterVersion object in the
 	// openshift cluster.
 	clusterVersionName                = "version"
-	manageNoobaaSubKey                = "manageNoobaaSubscription"
 	disableVersionChecksKey           = "disableVersionChecks"
 	disableInstallPlanAutoApprovalKey = "disableInstallPlanAutoApproval"
 	subscriptionLabelKey              = "managed-by"
@@ -333,16 +332,6 @@ func (c *OperatorConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		if err := c.reconcileClientOperatorSubscription(); err != nil {
 			c.log.Error(err, "unable to reconcile client operator subscription")
 			return ctrl.Result{}, err
-		}
-
-		//don't reconcile noobaa-operator for remote clusters
-		if false {
-			if c.getNoobaaSubManagementConfig() {
-				if err := c.reconcileNoobaaOperatorSubscription(); err != nil {
-					c.log.Error(err, "unable to reconcile Noobaa Operator subscription")
-					return ctrl.Result{}, err
-				}
-			}
 		}
 
 		// remove noobaa resources installed by older version of Client
@@ -891,23 +880,6 @@ func (c *OperatorConfigMapReconciler) reconcileClientOperatorSubscription() erro
 	if updateRequired {
 		if err := c.update(clientSubscription); err != nil {
 			return fmt.Errorf("failed to update subscription channel to %v: %v", c.subscriptionChannel, err)
-		}
-	}
-	return nil
-}
-
-func (c *OperatorConfigMapReconciler) reconcileNoobaaOperatorSubscription() error {
-	noobaaSubscription, err := getSubscriptionByPackageName(c.ctx, c.Client, c.OperatorNamespace, "mcg-operator")
-	if kerrors.IsNotFound(err) {
-		noobaaSubscription, err = getSubscriptionByPackageName(c.ctx, c.Client, c.OperatorNamespace, "noobaa-operator")
-	}
-	if err != nil {
-		return err
-	}
-	if c.subscriptionChannel != "" && c.subscriptionChannel != noobaaSubscription.Spec.Channel {
-		noobaaSubscription.Spec.Channel = c.subscriptionChannel
-		if err := c.update(noobaaSubscription); err != nil {
-			return fmt.Errorf("failed to update subscription channel of 'mcg-operator' to %v: %v", c.subscriptionChannel, err)
 		}
 	}
 	return nil
