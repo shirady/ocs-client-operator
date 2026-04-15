@@ -783,22 +783,6 @@ func (c *OperatorConfigMapReconciler) ensureConsolePlugin() error {
 	return nil
 }
 
-func (c *OperatorConfigMapReconciler) getNoobaaSubManagementConfig() bool {
-	valAsString, ok := c.operatorConfigMap.Data[manageNoobaaSubKey]
-	if !ok {
-		return true
-	}
-	val, err := strconv.ParseBool(valAsString)
-	if err != nil {
-		c.log.Error(
-			err,
-			"Unsupported value under manageNoobaaSubscription key",
-		)
-		return true
-	}
-	return val
-}
-
 func (c *OperatorConfigMapReconciler) shouldGenerateRBDOmapInfo() bool {
 	valAsString := strings.ToLower(c.operatorConfigMap.Data[generateRbdOMapInfoKey])
 	return valAsString == strconv.FormatBool(true)
