@@ -53,6 +53,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -235,13 +236,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	// disableObcControllerKey in ocs-client-operator-config is set by ocs-operator (clientConfig.Data).
+	controller.DisableObcControllerValue = false
+	operatorConfigMap := &corev1.ConfigMap{}
+	if err := apiClient.Get(context.Background(), client.ObjectKey{
+		Namespace: operatorNamespace,
+		Name:      controller.OperatorConfigMapName,
+	}, operatorConfigMap); err != nil {
+		if kerrors.IsNotFound(err) {
+			setupLog.Info("ocs-client-operator-config not found; ObjectBucketClaim controller follows CRD presence (disableObcControllerKey defaults off)")
+		} else {
+			// Keep default disableObcControllerKey=false; OperatorConfigMap reconcile will read the ConfigMap and exit(42) if the value differs.
+			setupLog.Info("could not read ocs-client-operator-config at startup; defaulting disableObcControllerKey to false until reconcile succeeds",
+				"error", err)
+		}
+	} else {
+		controller.DisableObcControllerValue = controller.ParseDisableObcControllerKeyFromConfigMapData(operatorConfigMap.Data)
+	}
+	if controller.DisableObcControllerValue {
+		setupLog.Info("ObjectBucketClaim controller disabled via ocs-client-operator-config disableObcControllerKey")
+	}
+	runObcController := !controller.DisableObcControllerValue
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7cb6f2e5.ocs.openshift.io",
-		Cache:                  buildCacheAvailableCRDs(availCrds, defaultNamespaces, operatorNamespace),
+		Cache:                  buildCacheAvailableCRDs(availCrds, defaultNamespaces, operatorNamespace, runObcController),
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:    webhookPort,
 			CertDir: "/etc/tls/private",
@@ -342,7 +365,7 @@ func main() {
 		}
 	}
 
-	if availCrds[controller.ObjectBucketClaimCrdName] {
+	if availCrds[controller.ObjectBucketClaimCrdName] && runObcController {
 		if err = (&controller.ObcReconciler{
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
@@ -381,6 +404,7 @@ func buildCacheAvailableCRDs(
 	availCrds map[string]bool,
 	defaultNamespaces map[string]cache.Config,
 	operatorNamespace string,
+	runObcController bool,
 ) cache.Options {
 	subscriptionwebhookSelector := fields.SelectorFromSet(fields.Set{"metadata.name": templates.SubscriptionWebhookName})
 	noobaaLabelSelector := labels.SelectorFromSet(labels.Set{"app": "noobaa"})
@@ -407,7 +431,7 @@ func buildCacheAvailableCRDs(
 	}
 	// Watch ObjectBucketClaim in all namespaces so OBC controller reconciles regardless of WATCH_NAMESPACE.
 	// Empty ByObject would be defaulted to DefaultNamespaces; explicitly set NamespaceAll to avoid that.
-	if availCrds[controller.ObjectBucketClaimCrdName] {
+	if availCrds[controller.ObjectBucketClaimCrdName] && runObcController {
 		cacheAvailableCrd.ByObject[&nbv1.ObjectBucketClaim{}] = cache.ByObject{
 			Namespaces: map[string]cache.Config{corev1.NamespaceAll: {}},
 		}

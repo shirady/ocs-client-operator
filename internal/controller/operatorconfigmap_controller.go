@@ -74,10 +74,11 @@ var (
 	//go:embed client-alert-rules.yaml
 	clientAlertPrometheusRules  string
 	subPackageIndexerRegistered bool
+	DisableObcControllerValue   bool
 )
 
 const (
-	operatorConfigMapName = "ocs-client-operator-config"
+	OperatorConfigMapName = "ocs-client-operator-config"
 	// ClusterVersionName is the name of the ClusterVersion object in the
 	// openshift cluster.
 	clusterVersionName                = "version"
@@ -115,6 +116,9 @@ const (
 	s3EndpointCertKeySuffix = ".crt"
 	// mount path for custom CA secret in the console pod.
 	s3EndpointCertsMountPath = "/etc/ssl/certs/s3-endpoint-ca-certs"
+
+	// disableObcControllerKey matches ocs-operator-client-config (was set in ocs-operator)
+	disableObcControllerKey = "disableObcControllerKey"
 )
 
 // ConfigMapData value from the provider that contains the s3 endpoint info (key is the unique identifier, using which the endpoint is exposed).
@@ -125,11 +129,11 @@ type s3EndpointConfig struct {
 // OperatorConfigMapReconciler reconciles a ClusterVersion object
 type OperatorConfigMapReconciler struct {
 	client.Client
-	OperatorNamespace        string
-	ConsolePort              int32
-	Scheme                   *runtime.Scheme
-	AvailableCrds            map[string]bool
-	UpdateAlertPollInterval  func(time.Duration)
+	OperatorNamespace       string
+	ConsolePort             int32
+	Scheme                  *runtime.Scheme
+	AvailableCrds           map[string]bool
+	UpdateAlertPollInterval func(time.Duration)
 
 	log                 logr.Logger
 	ctx                 context.Context
@@ -156,7 +160,7 @@ func (c *OperatorConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					return false
 				}
 
-				if obj.GetName() == operatorConfigMapName {
+				if obj.GetName() == OperatorConfigMapName {
 					return true
 				}
 
@@ -170,7 +174,7 @@ func (c *OperatorConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		func(_ context.Context, _ client.Object) []reconcile.Request {
 			return []reconcile.Request{{
 				NamespacedName: types.NamespacedName{
-					Name:      operatorConfigMapName,
+					Name:      OperatorConfigMapName,
 					Namespace: c.OperatorNamespace,
 				},
 			}}
@@ -518,6 +522,9 @@ func (c *OperatorConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		}
 
 		c.log.Info("client alert prometheus rules deployed", "prometheusRule", klog.KRef(clientAlertRule.Namespace, clientAlertRule.Name))
+
+		desiredDisableObc := ParseDisableObcControllerKeyFromConfigMapData(c.operatorConfigMap.Data)
+		utils.AssertEqual(desiredDisableObc, DisableObcControllerValue, utils.ExitCodeThatShouldRestartTheProcess)
 
 	} else {
 		// deletion phase
@@ -1502,4 +1509,11 @@ func (c *OperatorConfigMapReconciler) checkIfTNFCluster() (bool, error) {
 	c.log.Info("Cluster is running in DualReplica topology (TwoNodeFenced)", "DualReplica", isTnfCluster)
 
 	return isTnfCluster, nil
+}
+
+// ParseDisableObcControllerKeyFromConfigMapData returns whether the OBC controller (inside the ocs-client-operator) should be disabled.
+// Missing or invalid keys default to false (OBC controller runs).
+func ParseDisableObcControllerKeyFromConfigMapData(data map[string]string) bool {
+	disabled, err := strconv.ParseBool(cmp.Or(data[disableObcControllerKey], "false"))
+	return err == nil && disabled
 }
