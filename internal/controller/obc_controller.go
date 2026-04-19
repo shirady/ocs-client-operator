@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
 	storagev1 "k8s.io/api/storage/v1"
-	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -33,8 +31,6 @@ const (
 type ObcReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	ObcCrdPresentAtStart bool
 }
 
 type obcReconcile struct {
@@ -46,22 +42,9 @@ type obcReconcile struct {
 
 // SetupWithManager sets up the controller with the Manager
 func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	bldr := ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).
 		Named("ObjectBucketClaim").
-		Watches(
-			&extv1.CustomResourceDefinition{},
-			&handler.EnqueueRequestForObject{},
-			builder.WithPredicates(
-				predicate.NewPredicateFuncs(func(obj client.Object) bool {
-					return obj.GetName() == ObjectBucketClaimCrdName
-				}),
-				// added the event of Update on the CRD for the Established transition
-				utils.EventTypePredicate(true, true, false, false),
-			),
-		)
-	// Primary reconcile target when main put OBC in the manager cache (see cmd/main.go + AssertEqual restart path).
-	if r.ObcCrdPresentAtStart {
-		bldr = bldr.For(
+		For(
 			&nbv1.ObjectBucketClaim{},
 			// we filter out updates on status intentionally (it is updated from outside)
 			builder.WithPredicates(
@@ -70,15 +53,13 @@ func (r *ObcReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					predicate.LabelChangedPredicate{},
 				),
 			),
-		)
-	}
-	return bldr.Complete(r)
+		).
+		Complete(r)
 }
 
 //+kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups=ocs.openshift.io,resources=storageclients,verbs=get
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get
-//+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
 func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	handler := obcReconcile{ObcReconciler: r}
@@ -87,14 +68,6 @@ func (r *ObcReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 // reconcile is the main reconciliation loop for the OBC.
 func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconcile.Result, error) {
-	skip, err := r.ensureObcWatch(ctx, req)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if skip {
-		return reconcile.Result{}, nil
-	}
-
 	r.log = ctrl.LoggerFrom(ctx).WithName("OBC")
 	r.ctx = ctx
 	r.obc.Name = req.Name
@@ -117,22 +90,6 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 	}
 
 	return result, nil
-}
-
-// ensureObcWatch checks that OBC CRD presence matches how the process was started (restart via
-// AssertEqual when the CRD appears after start; see cmd/main.go). If req is the enqueue key for the
-// OBC CRD itself (not an OBC instance), skip is true so we do not treat it as an OBC reconcile.
-func (r *ObcReconciler) ensureObcWatch(ctx context.Context, req ctrl.Request) (skip bool, err error) {
-	crd := &extv1.CustomResourceDefinition{}
-	crd.Name = ObjectBucketClaimCrdName
-	if err := r.Get(ctx, client.ObjectKeyFromObject(crd), crd); client.IgnoreNotFound(err) != nil {
-		return false, err
-	}
-	utils.AssertEqual(r.ObcCrdPresentAtStart, crd.UID != "", utils.ExitCodeThatShouldRestartTheProcess)
-	if req.Namespace == "" && req.Name == ObjectBucketClaimCrdName {
-		return true, nil
-	}
-	return false, nil
 }
 
 // reconcilePhases handles the different phases of the OBC reconciliation.
