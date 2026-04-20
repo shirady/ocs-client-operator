@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/go-logr/logr"
 	"github.com/red-hat-storage/ocs-client-operator/pkg/utils"
 	extv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,6 +26,7 @@ type CrdsPresenceReconciler struct {
 	client.Client
 	AvailableCrds     map[string]bool
 	ShutdownContainer func()
+	log               logr.Logger
 }
 
 func (r *CrdsPresenceReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -47,11 +49,11 @@ func (r *CrdsPresenceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *CrdsPresenceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	for _, name := range CrdsWatchedForPresenceRestart {
-
 		crd := &metav1.PartialObjectMetadata{}
 		crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
 		crd.Name = name
 		if err := r.Get(ctx, client.ObjectKeyFromObject(crd), crd); client.IgnoreNotFound(err) != nil {
+			r.log.Error(err, "Failed to get CRD", "CRD", crd.Name)
 			return ctrl.Result{}, err
 		}
 		presentNow := crd.UID != ""
