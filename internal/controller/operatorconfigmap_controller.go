@@ -130,7 +130,6 @@ type OperatorConfigMapReconciler struct {
 	Scheme                  *runtime.Scheme
 	AvailableCrds           map[string]bool
 	UpdateAlertPollInterval func(time.Duration)
-	ShutdownContainer       func()
 
 	log                 logr.Logger
 	ctx                 context.Context
