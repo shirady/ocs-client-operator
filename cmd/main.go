@@ -342,11 +342,12 @@ func main() {
 		}
 	}
 
-	if err = (&controller.ObcCrdReconciler{
-		Client:               mgr.GetClient(),
-		ObcCrdPresentAtStart: availCrds[controller.ObjectBucketClaimCrdName],
+	if err = (&controller.CrdsPresenceReconciler{
+		Client:          mgr.GetClient(),
+		AvailableCrds:   availCrds,
+		ProcessShutdown: processShutDown,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketClaimCrd")
+		setupLog.Error(err, "unable to create controller", "controller", "CrdsPresence")
 		os.Exit(1)
 	}
 
@@ -421,4 +422,9 @@ func buildCacheAvailableCRDs(
 		}
 	}
 	return cacheAvailableCrd
+}
+
+// processShutDown gracefully exit
+func processShutDown() {
+	os.Exit(utils.ExitCodeThatShouldRestartTheProcess)
 }
