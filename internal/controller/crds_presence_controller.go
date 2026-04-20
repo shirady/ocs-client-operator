@@ -22,8 +22,8 @@ var CrdsWatchedForPresenceRestart = []string{
 
 type CrdsPresenceReconciler struct {
 	client.Client
-	AvailableCrds   map[string]bool
-	ShutdownManager func()
+	AvailableCrds     map[string]bool
+	ShutdownContainer func()
 }
 
 func (r *CrdsPresenceReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -53,7 +53,7 @@ func (r *CrdsPresenceReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		presentNow := crd.UID != ""
 		if r.AvailableCrds[name] != presentNow {
-			r.ShutdownManager()
+			r.ShutdownContainer()
 			return ctrl.Result{}, nil
 		}
 	}

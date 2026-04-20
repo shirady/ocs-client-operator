@@ -130,6 +130,7 @@ type OperatorConfigMapReconciler struct {
 	Scheme                  *runtime.Scheme
 	AvailableCrds           map[string]bool
 	UpdateAlertPollInterval func(time.Duration)
+	ShutdownContainer       func()
 
 	log                 logr.Logger
 	ctx                 context.Context
@@ -346,7 +347,9 @@ func (c *OperatorConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		c.log.Error(err, "Failed to get CRD", "CRD", crd.Name)
 		return reconcile.Result{}, err
 	}
-	utils.AssertEqual(c.AvailableCrds[crd.Name], crd.UID != "", utils.ExitCodeThatShouldRestartTheProcess)
+	if c.AvailableCrds[crd.Name] != (crd.UID != "") {
+		c.ShutdownContainer()
+	}
 
 	c.operatorConfigMap = &corev1.ConfigMap{}
 	c.operatorConfigMap.Name = req.Name
