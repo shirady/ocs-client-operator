@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -342,10 +343,13 @@ func main() {
 		}
 	}
 
+	ctx, cancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancel()
+
 	if err = (&controller.CrdsPresenceReconciler{
 		Client:          mgr.GetClient(),
 		AvailableCrds:   availCrds,
-		ProcessShutdown: processShutDown,
+		ProcessShutdown: cancel,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CrdsPresence")
 		os.Exit(1)
@@ -366,7 +370,8 @@ func main() {
 	metrics.Registry.MustRegister(alertCollector, resourceCollector)
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	err = mgr.Start(ctx)
+	if err != nil && !errors.Is(err, context.Canceled) {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
@@ -422,9 +427,4 @@ func buildCacheAvailableCRDs(
 		}
 	}
 	return cacheAvailableCrd
-}
-
-// processShutDown gracefully exit
-func processShutDown() {
-	os.Exit(utils.ExitCodeThatShouldRestartTheProcess)
 }
