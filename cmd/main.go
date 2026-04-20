@@ -349,7 +349,7 @@ func main() {
 	if err = (&controller.CrdsPresenceReconciler{
 		Client:          mgr.GetClient(),
 		AvailableCrds:   availCrds,
-		ProcessShutdown: cancel,
+		ShutdownManager: cancel,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CrdsPresence")
 		os.Exit(1)
