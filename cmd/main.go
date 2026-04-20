@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -374,8 +373,7 @@ func main() {
 	metrics.Registry.MustRegister(alertCollector, resourceCollector)
 
 	setupLog.Info("starting manager")
-	err = mgr.Start(ctx)
-	if err := mgr.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
