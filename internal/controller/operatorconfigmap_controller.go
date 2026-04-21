@@ -39,7 +39,6 @@ import (
 
 	csiopv1 "github.com/ceph/ceph-csi-operator/api/v1"
 	"github.com/go-logr/logr"
-	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
 	configv1 "github.com/openshift/api/config/v1"
 	secv1 "github.com/openshift/api/security/v1"
 	opv1a1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
@@ -96,8 +95,6 @@ const (
 	subPackageIndexName        = "index:subscriptionPackage"
 	csiImagesConfigMapLabel    = "ocs.openshift.io/csi-images-version"
 	cniNetworksAnnotationKey   = "k8s.v1.cni.cncf.io/networks"
-	noobaaCrdName              = "noobaas.noobaa.io"
-	noobaaCrName               = "noobaa-remote"
 
 	// disableS3EndpointProxyKey, if true, disables deploying the s3 endpoint reverse proxy for the local/internal client.
 	disableS3EndpointProxyKey    = "disableS3EndpointProxy"
@@ -295,17 +292,6 @@ func (c *OperatorConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			s3EndpointCASecretPredicates,
 		)
 
-	if c.AvailableCrds[noobaaCrdName] {
-		bldr.Watches(
-			&nbv1.NooBaa{},
-			enqueueConfigMapRequest,
-			builder.WithPredicates(
-				utils.NamePredicate(noobaaCrName),
-				predicate.GenerationChangedPredicate{},
-			),
-		)
-	}
-
 	return bldr.Complete(c)
 }
 
@@ -327,7 +313,6 @@ func (c *OperatorConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations,verbs=get;list;update;create;watch;delete
 //+kubebuilder:rbac:groups=csi.ceph.io,resources=operatorconfigs,verbs=get;list;update;create;watch;delete
 //+kubebuilder:rbac:groups=csi.ceph.io,resources=drivers,verbs=get;list;update;create;watch;delete
-//+kubebuilder:rbac:groups=noobaa.io,resources=noobaas,verbs=get;list;watch;update;delete
 //+kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures,verbs=get;list;watch
 
 // For more details, check Reconcile and its Result here:
