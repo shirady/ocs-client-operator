@@ -58,6 +58,11 @@ func (r *CrdsPresenceReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		presentNow := crd.UID != ""
 		if r.AvailableCrds[name] != presentNow {
+			r.log.Info("CRD presence changed",
+				"CRD name", crd.Name,
+				"presence at manager start", r.AvailableCrds[name],
+				"presence now", presentNow,
+				"restarting container")
 			r.ShutdownContainer()
 			return ctrl.Result{}, nil
 		}
