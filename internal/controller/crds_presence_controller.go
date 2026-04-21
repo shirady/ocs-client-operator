@@ -38,7 +38,6 @@ func (r *CrdsPresenceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				predicate.NewPredicateFuncs(func(obj client.Object) bool {
 					return slices.Contains(CrdsWatchedForPresenceRestart, obj.GetName())
 				}),
-				// Create: CRD installed after start; Delete: CRD removed after start.
 				utils.EventTypePredicate(true, false, true, false),
 			),
 		).
@@ -48,6 +47,8 @@ func (r *CrdsPresenceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 
 func (r *CrdsPresenceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.log = ctrl.LoggerFrom(ctx).WithName("CrdsPresence")
+
 	for _, name := range CrdsWatchedForPresenceRestart {
 		crd := &metav1.PartialObjectMetadata{}
 		crd.SetGroupVersionKind(extv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
