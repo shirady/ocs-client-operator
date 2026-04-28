@@ -102,7 +102,7 @@ func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 	storageClient, err := r.getStorageClientFromStorageClass(r.obc.Spec.StorageClassName)
 	if err != nil {
 		if errors.Is(err, errStorageClassNoStorageClientOwner) {
-			r.log.Info("StorageClass is not owned by a StorageClient; finish OBC reconciliation",
+			r.log.Info("StorageClass is not owned by a StorageClient; skipping OBC reconciliation",
 				"storageClassName", r.obc.Spec.StorageClassName)
 			return reconcile.Result{}, nil
 		}
