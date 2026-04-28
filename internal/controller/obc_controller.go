@@ -196,7 +196,7 @@ func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string)
 		},
 	)
 	if ownerStorageClientIndex == -1 {
-		return nil, fmt.Errorf("%w: %q", errStorageClassNoStorageClientOwner, storageClassName)
+		return nil, errStorageClassNoStorageClientOwner
 	}
 	storageClient := &v1alpha1.StorageClient{}
 	storageClient.Name = storageClass.OwnerReferences[ownerStorageClientIndex].Name
