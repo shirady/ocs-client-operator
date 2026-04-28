@@ -230,11 +230,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	enqueueStorageClientRequestFromOBC := handler.EnqueueRequestsFromMapFunc(
 		func(_ context.Context, obj client.Object) []ctrl.Request {
 			if name := obj.GetLabels()[storageClientNameLabel]; name != "" {
-				return []ctrl.Request{{
-					NamespacedName: client.ObjectKeyFromObject(&v1alpha1.StorageClient{
-						ObjectMeta: metav1.ObjectMeta{Name: name},
-					}),
-				}}
+				return []ctrl.Request{{NamespacedName: types.NamespacedName{Name: name}}}
 			}
 			return nil
 		},
