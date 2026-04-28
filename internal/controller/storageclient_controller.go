@@ -221,7 +221,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 			oldOBC := e.ObjectOld.(*nbv1.ObjectBucketClaim)
 			newOBC := e.ObjectNew.(*nbv1.ObjectBucketClaim)
-			if newOBC.GetLabels() == nil || newOBC.GetLabels()[storageClientNameLabel] == "" {
+			if len(newOBC.GetLabels()) == 0 || newOBC.GetLabels()[storageClientNameLabel] == "" {
 				return false
 			}
 			return !reflect.DeepEqual(oldOBC.Status, newOBC.Status)
