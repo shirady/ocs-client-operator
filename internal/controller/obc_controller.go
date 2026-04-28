@@ -28,9 +28,9 @@ const (
 	obcControllerFinalizer = "ocs.openshift.io/obccleanup"
 )
 
-// errStorageClassNoStorageClientOwner is returned when the OBC's StorageClass is not
+// errStorageClassHasNoStorageClientAsOwner is returned when the OBC's StorageClass is not
 // owned by a StorageClient. The reconciler treats this as a no-op (success, no requeue).
-var errStorageClassNoStorageClientOwner = errors.New("StorageClass has no StorageClient ownerReference")
+var errStorageClassHasNoStorageClientAsOwner = errors.New("StorageClass has no StorageClient ownerReference")
 
 // ObcReconciler reconciles a ObjectBucketClaim object
 type ObcReconciler struct {
@@ -101,7 +101,7 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 	storageClient, err := r.getStorageClientFromStorageClass(r.obc.Spec.StorageClassName)
 	if err != nil {
-		if errors.Is(err, errStorageClassNoStorageClientOwner) {
+		if errors.Is(err, errStorageClassHasNoStorageClientAsOwner) {
 			r.log.Info("StorageClass is not owned by a StorageClient; skipping OBC reconciliation",
 				"storageClassName", r.obc.Spec.StorageClassName)
 			return reconcile.Result{}, nil
@@ -196,7 +196,7 @@ func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string)
 		},
 	)
 	if ownerStorageClientIndex == -1 {
-		return nil, errStorageClassNoStorageClientOwner
+		return nil, errStorageClassHasNoStorageClientAsOwner
 	}
 	storageClient := &v1alpha1.StorageClient{}
 	storageClient.Name = storageClass.OwnerReferences[ownerStorageClientIndex].Name
