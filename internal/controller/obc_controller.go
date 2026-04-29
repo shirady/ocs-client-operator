@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
@@ -27,10 +26,6 @@ import (
 const (
 	obcControllerFinalizer = "ocs.openshift.io/obccleanup"
 )
-
-// errStorageClassHasNoStorageClientAsOwner is returned when the OBC's StorageClass is not
-// owned by a StorageClient. The reconciler treats this as a no-op (success, no requeue).
-var errStorageClassHasNoStorageClientAsOwner = errors.New("StorageClass has no StorageClient ownerReference")
 
 // ObcReconciler reconciles a ObjectBucketClaim object
 type ObcReconciler struct {
@@ -101,13 +96,14 @@ func (r *obcReconcile) reconcile(ctx context.Context, req ctrl.Request) (reconci
 func (r *obcReconcile) reconcilePhases() (ctrl.Result, error) {
 	storageClient, err := r.getStorageClientFromStorageClass(r.obc.Spec.StorageClassName)
 	if err != nil {
-		if errors.Is(err, errStorageClassHasNoStorageClientAsOwner) {
-			r.log.Info("StorageClass is not owned by a StorageClient; skipping OBC reconciliation",
-				"storageClassName", r.obc.Spec.StorageClassName)
-			return reconcile.Result{}, nil
-		}
 		r.log.Error(err, "failed to get StorageClient")
 		return reconcile.Result{}, fmt.Errorf("failed to get StorageClient: %w", err)
+	}
+
+	if storageClient == nil {
+		r.log.Info("StorageClass is not owned by a StorageClient; skipping OBC reconciliation",
+			"storageClassName", r.obc.Spec.StorageClassName)
+		return reconcile.Result{}, nil
 	}
 
 	ocsProviderClient, err := providerClient.NewProviderClient(r.ctx, storageClient.Spec.StorageProviderEndpoint, utils.OcsClientTimeout)
@@ -183,6 +179,8 @@ func (r *obcReconcile) handleObcDeletion(
 }
 
 // getStorageClientFromStorageClass returns the StorageClient that owns the given StorageClass (via ownerReference).
+// If the StorageClass exists but has no StorageClient owner reference, it returns (nil, nil) so callers can skip
+// reconcile without treating it as an error.
 func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string) (*v1alpha1.StorageClient, error) {
 	storageClass := &storagev1.StorageClass{}
 	storageClass.Name = storageClassName
@@ -196,7 +194,7 @@ func (r *obcReconcile) getStorageClientFromStorageClass(storageClassName string)
 		},
 	)
 	if ownerStorageClientIndex == -1 {
-		return nil, errStorageClassHasNoStorageClientAsOwner
+		return nil, nil
 	}
 	storageClient := &v1alpha1.StorageClient{}
 	storageClient.Name = storageClass.OwnerReferences[ownerStorageClientIndex].Name
