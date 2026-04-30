@@ -214,19 +214,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return requests
 		},
 	)
-	obcStorageClientNameLabelPredicate := predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldOBC, oldOk := e.ObjectOld.(*nbv1.ObjectBucketClaim)
-			newOBC, newOk := e.ObjectNew.(*nbv1.ObjectBucketClaim)
-			if !oldOk || !newOk || oldOBC == nil || newOBC == nil {
-				return false
-			}
-			oldName := oldOBC.GetLabels()[storageClientNameLabel]
-			newName := newOBC.GetLabels()[storageClientNameLabel]
-			return oldName != "" && newName != "" && oldName == newName
-		},
-	}
-	obcStatusPredicate := predicate.Funcs{
+	obcStatusChangedPredicate := predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			oldOBC, oldOk := e.ObjectOld.(*nbv1.ObjectBucketClaim)
 			newOBC, newOk := e.ObjectNew.(*nbv1.ObjectBucketClaim)
@@ -274,8 +262,9 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			enqueueStorageClientRequestFromOBC,
 			builder.WithPredicates(
 				predicate.And(
-					obcStorageClientNameLabelPredicate,
-					obcStatusPredicate,
+					utils.EventTypePredicate(false, true, false, false),
+					utils.LabelExistsPredicate(storageClientNameLabel),
+					obcStatusChangedPredicate,
 				),
 			),
 		)
