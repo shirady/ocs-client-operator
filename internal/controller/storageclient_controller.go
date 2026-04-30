@@ -218,7 +218,7 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			oldOBC, oldOk := e.ObjectOld.(*nbv1.ObjectBucketClaim)
 			newOBC, newOk := e.ObjectNew.(*nbv1.ObjectBucketClaim)
-			if !oldOk || !newOk {
+			if !oldOk || !newOk || oldOBC == nil || newOBC == nil {
 				return false
 			}
 			if len(newOBC.GetLabels()) == 0 || newOBC.GetLabels()[storageClientNameLabel] == "" {
