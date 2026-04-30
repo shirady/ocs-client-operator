@@ -226,10 +226,14 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	enqueueStorageClientRequestFromOBC := handler.EnqueueRequestsFromMapFunc(
 		func(_ context.Context, obj client.Object) []ctrl.Request {
-			if obj != nil && obj.GetLabels() != nil {
+			if obj == nil {
 				return nil
 			}
-			storageClientName := obj.GetLabels()[storageClientNameLabel]
+			labels := obj.GetLabels()
+			if labels == nil {
+				return nil
+			}
+			storageClientName := labels[storageClientNameLabel]
 			if storageClientName == "" {
 				return nil
 			}
