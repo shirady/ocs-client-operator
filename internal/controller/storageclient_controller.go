@@ -216,11 +216,11 @@ func (r *StorageClientReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	)
 	obcStatusPredicate := predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.ObjectOld == nil || e.ObjectNew == nil {
+			oldOBC, oldOk := e.ObjectOld.(*nbv1.ObjectBucketClaim)
+			newOBC, newOk := e.ObjectNew.(*nbv1.ObjectBucketClaim)
+			if !oldOk || !newOk {
 				return false
 			}
-			oldOBC := e.ObjectOld.(*nbv1.ObjectBucketClaim)
-			newOBC := e.ObjectNew.(*nbv1.ObjectBucketClaim)
 			if len(newOBC.GetLabels()) == 0 || newOBC.GetLabels()[storageClientNameLabel] == "" {
 				return false
 			}
